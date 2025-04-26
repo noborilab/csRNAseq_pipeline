@@ -5,6 +5,9 @@
 # Date modified: 24 April 2025
 #
 
+XARGS=xargs
+xargs --version 2> /dev/null || XARGS="xargs -S 16384"
+
 set -eo pipefail
 
 WD=`pwd`
@@ -159,8 +162,7 @@ done < ./tmp_input
 if [ `cat ./tmp_trim | wc -l` -gt 0 ] ; then
     echo "    Trimming reads for `cat ./tmp_trim | wc -l` samples ..."
 
-    # TODO: Check this is portable
-    cat ./tmp_trim | xargs -S 16384 -P ${BFQ_THREADS} -I {} sh -c {}
+    cat ./tmp_trim | $XARGS -P ${BFQ_THREADS} -I {} sh -c {}
 
     echo "    Done."
 
