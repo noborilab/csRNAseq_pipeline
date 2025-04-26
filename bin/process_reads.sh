@@ -14,6 +14,7 @@ INDEX=
 ADP=AGATCGGAAGAGCACACGTCTGAACTCCAGTCA
 MAX_LEN=70
 BWA_THREADS=4
+BFQ_THREADS=6
 SAM_THREADS=4
 BWA_MAPQ=30
 OUT_QC="./qc"
@@ -40,6 +41,7 @@ help() {
     echo "-I   Path to genome in bwa index folder."
     echo "-j   Number of threads for bwa-aln. (default=${BWA_THREADS})"
     echo "-J   Number of threads for samtools-sort. (default=${SAM_THREADS})"
+    echo "-k   Number of threads for FASTQ merging/trimming. (default=${BFQ_THREADS})"
     echo "-Q   bwa-aln mapping score cutoff for aligned reads. (default=${BWA_MAPQ})"
     echo "-q   Output dir for QC files. (default=${OUT_QC})"
     echo "-T   Output dir for trimmed FASTQ files. (default=${OUT_TRIM})"
@@ -55,7 +57,7 @@ help() {
     exit 1
 }
 
-while getopts "i:o:a:m:I:j:Q:q:T:b:t:fh" opt ; do
+while getopts "i:o:a:m:I:j:J:k:Q:q:T:b:t:fh" opt ; do
     case $opt in 
         i) INPUT=$OPTARG;;
         o) SAMPLE_SHEET=$OPTARG;;
@@ -63,6 +65,8 @@ while getopts "i:o:a:m:I:j:Q:q:T:b:t:fh" opt ; do
         m) MAX_LEN=$OPTARG;;
         I) INDEX=$OPTARG;;
         j) BWA_THREADS=$OPTARG;;
+        J) SAM_THREADS=$OPTARG;;
+        k) BFQ_THREADS=$OPTARG;;
         Q) BWA_MAPQ=$OPTARG;;
         q) OUT_QC=$OPTARG;;
         T) OUT_TRIM=$OPTARG;;
@@ -82,6 +86,7 @@ cat $INPUT | tr -d '\r' > ./tmp_input
 cleanup() {
     cd $WD
     rm -f ./tmp_input
+    rm -f ./tmp_trim
 }
 trap cleanup EXIT
 
@@ -105,7 +110,67 @@ mkdir -p ${OUT_TAGDIR}
 rm -f ${SAMPLE_SHEET}
 touch ${SAMPLE_SHEET}
 
+rm -f ./tmp_trim
+touch ./tmp_trim
+
 echo "Processing `grep . ./tmp_input | wc -l` samples ..."
+
+#########################
+
+while IFS=$'\t' read -r SAMPLE R1 R2 || [ $SAMPLE ] ; do
+
+    [ -z $SAMPLE ] && continue
+
+    [ -z $R1 ] && { echo "Error: missing R1 fastq for sample $SAMPLE"; exit 1; }
+
+    if [ -z $R2 ] ; then
+        if [ ! -f ${OUT_TRIM}/${SAMPLE}.trim.fq.gz ] || [ ! -z $FORCE ] ; then
+            echo -n "$BFQUTILS bfqtrimse -m $MAX_LEN -a $ADP $R1 " >> ./tmp_trim
+            echo -n "2> ${OUT_QC}/${SAMPLE}.trimming.txt " >> ./tmp_trim
+            echo -n "| $BFQUTILS bfqstats -O -N -z " >> ./tmp_trim
+            echo -n "-l ${OUT_QC}/${SAMPLE}.trim.lengths.txt " >> ./tmp_trim
+            echo -n "-g ${OUT_QC}/${SAMPLE}.trim.gc.txt " >> ./tmp_trim
+            echo -n "-q ${OUT_QC}/${SAMPLE}.trim.qual.txt " >> ./tmp_trim
+            echo -n "-Q ${OUT_QC}/${SAMPLE}.trim.ppqual.txt " >> ./tmp_trim
+            echo -n "-b ${OUT_QC}/${SAMPLE}.trim.ppbase.txt " >> ./tmp_trim
+            echo -n "-k ${OUT_QC}/${SAMPLE}.trim.kmer.txt " >> ./tmp_trim
+            echo -n "-o ${OUT_QC}/${SAMPLE}.trim.summary.txt " >> ./tmp_trim
+            echo -n "- " >> ./tmp_trim
+            echo "> ${OUT_TRIM}/${SAMPLE}.trim.fq.gz" >> ./tmp_trim
+        fi
+    else
+        if [ ! -f ${OUT_TRIM}/${SAMPLE}.trim.fq.gz ] || [ ! -z $FORCE ] ; then
+            echo -n "$BFQUTILS bfqmerge -m $MAX_LEN $R1 $R2 " >> ./tmp_trim
+            echo -n "2> ${OUT_QC}/${SAMPLE}.trimming.txt " >> ./tmp_trim
+            echo -n "| $BFQUTILS bfqstats -O -N -z " >> ./tmp_trim
+            echo -n "-l ${OUT_QC}/${SAMPLE}.trim.lengths.txt " >> ./tmp_trim
+            echo -n "-g ${OUT_QC}/${SAMPLE}.trim.gc.txt " >> ./tmp_trim
+            echo -n "-q ${OUT_QC}/${SAMPLE}.trim.qual.txt " >> ./tmp_trim
+            echo -n "-Q ${OUT_QC}/${SAMPLE}.trim.ppqual.txt " >> ./tmp_trim
+            echo -n "-b ${OUT_QC}/${SAMPLE}.trim.ppbase.txt " >> ./tmp_trim
+            echo -n "-k ${OUT_QC}/${SAMPLE}.trim.kmer.txt " >> ./tmp_trim
+            echo -n "-o ${OUT_QC}/${SAMPLE}.trim.summary.txt " >> ./tmp_trim
+            echo -n "- " >> ./tmp_trim
+            echo "> ${OUT_TRIM}/${SAMPLE}.trim.fq.gz" >> ./tmp_trim
+        fi
+    fi
+done < ./tmp_input
+
+if [ `cat ./tmp_trim | wc -l` -gt 0 ] ; then
+    echo "    Trimming reads for `cat ./tmp_trim | wc -l` samples ..."
+
+    # TODO: Check this is portable
+    cat ./tmp_trim | xargs -S 16384 -P ${BFQ_THREADS} -I {} sh -c {}
+
+    echo "    Done."
+
+else
+
+    echo "    No trimming to be done."
+
+fi
+
+#########################
 
 while IFS=$'\t' read -r SAMPLE R1 R2 || [ $SAMPLE ] ; do
 
@@ -114,46 +179,6 @@ while IFS=$'\t' read -r SAMPLE R1 R2 || [ $SAMPLE ] ; do
     echo "    Working on sample: $SAMPLE"
     [ -z $R1 ] && { echo "Error: missing R1 fastq for sample $SAMPLE"; exit 1; }
     [ -z $R2 ] && echo "        Found no R2 fastq, assuming SE."
-
-    TOTAL_READS=0
-    FINAL_READS=0
-
-    # TODO: Parallelize trimming with xargs across multiple samples simultaneously!
-    if [ -z $R2 ] ; then
-        if [ ! -f ${OUT_TRIM}/${SAMPLE}.trim.fq.gz ] || [ ! -z $FORCE ] ; then
-            echo "        Trimming SE reads ..."
-            gunzip -c $R1 | $BFQUTILS bfqtrimse -m $MAX_LEN -a $ADP - \
-                2> ${OUT_QC}/${SAMPLE}.trimming.txt \
-            | $BFQUTILS bfqstats -O -N -z \
-                -l ${OUT_QC}/${SAMPLE}.trim.lengths.txt \
-                -g ${OUT_QC}/${SAMPLE}.trim.gc.txt \
-                -q ${OUT_QC}/${SAMPLE}.trim.qual.txt \
-                -Q ${OUT_QC}/${SAMPLE}.trim.ppqual.txt \
-                -b ${OUT_QC}/${SAMPLE}.trim.ppbase.txt \
-                -k ${OUT_QC}/${SAMPLE}.trim.kmer.txt \
-                -o ${OUT_QC}/${SAMPLE}.trim.summary.txt \
-                > ${OUT_TRIM}/${SAMPLE}.trim.fq.gz
-        else
-            echo "        Skipping trimming SE reads"
-        fi
-    else
-        if [ ! -f ${OUT_TRIM}/${SAMPLE}.trim.fq.gz ] || [ ! -z $FORCE ] ; then
-            echo "        Merging PE reads ..."
-            $BFQUTILS bfqmerge -m $MAX_LEN <(gunzip -c $R1) <(gunzip -c $R2) \
-                2> ${OUT_QC}/${SAMPLE}.trimming.txt \
-            | $BFQUTILS bfqstats -O -N -z \
-                -l ${OUT_QC}/${SAMPLE}.trim.lengths.txt \
-                -g ${OUT_QC}/${SAMPLE}.trim.gc.txt \
-                -q ${OUT_QC}/${SAMPLE}.trim.qual.txt \
-                -Q ${OUT_QC}/${SAMPLE}.trim.ppqual.txt \
-                -b ${OUT_QC}/${SAMPLE}.trim.ppbase.txt \
-                -k ${OUT_QC}/${SAMPLE}.trim.kmer.txt \
-                -o ${OUT_QC}/${SAMPLE}.trim.summary.txt \
-                > ${OUT_TRIM}/${SAMPLE}.trim.fq.gz
-        else
-            echo "        Skipping merging PE reads"
-        fi
-    fi
 
     TOTAL_READS=`head -n 1 ${OUT_QC}/${SAMPLE}.trimming.txt | awk '{print $2}'`
     FINAL_READS=`tail -n 1 ${OUT_QC}/${SAMPLE}.trimming.txt | awk '{print $2}'`
