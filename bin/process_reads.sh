@@ -118,10 +118,12 @@ while IFS=$'\t' read -r SAMPLE R1 R2 || [ $SAMPLE ] ; do
     TOTAL_READS=0
     FINAL_READS=0
 
+    # TODO: Parallelize trimming with xargs across multiple samples simultaneously!
     if [ -z $R2 ] ; then
         if [ ! -f ${OUT_TRIM}/${SAMPLE}.trim.fq.gz ] || [ ! -z $FORCE ] ; then
             echo "        Trimming SE reads ..."
-            $BFQUTILS bfqtrimse -m $MAX_LEN -a $ADP $R1 2> ${OUT_QC}/${SAMPLE}.trimming.txt \
+            gunzip -c $R1 | $BFQUTILS bfqtrimse -m $MAX_LEN -a $ADP - \
+                2> ${OUT_QC}/${SAMPLE}.trimming.txt \
             | $BFQUTILS bfqstats -O -N -z \
                 -l ${OUT_QC}/${SAMPLE}.trim.lengths.txt \
                 -g ${OUT_QC}/${SAMPLE}.trim.gc.txt \
@@ -135,7 +137,8 @@ while IFS=$'\t' read -r SAMPLE R1 R2 || [ $SAMPLE ] ; do
     else
         if [ ! -f ${OUT_TRIM}/${SAMPLE}.trim.fq.gz ] || [ ! -z $FORCE ] ; then
             echo "        Merging PE reads ..."
-            $BFQUTILS bfqmerge -m $MAX_LEN $R1 $R2 2> ${OUT_QC}/${SAMPLE}.trimming.txt \
+            $BFQUTILS bfqmerge -m $MAX_LEN <(gunzip -c $R1) <(gunzip -c $R2) \
+                2> ${OUT_QC}/${SAMPLE}.trimming.txt \
             | $BFQUTILS bfqstats -O -N -z \
                 -l ${OUT_QC}/${SAMPLE}.trim.lengths.txt \
                 -g ${OUT_QC}/${SAMPLE}.trim.gc.txt \

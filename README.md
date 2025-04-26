@@ -10,6 +10,7 @@ Author: Benjamin Jean-Marie Tremblay
 * [bwa](https://github.com/lh3/bwa) (tested with v0.7.19)
 * [bedtools](https://github.com/arq5x/bedtools2) (tested with v2.31.1)
 * [R](https://cran.r-project.org) (with packages: rtracklayer, readr, edgeR; tested with v4.4.1)
+* Basic unix tools: gunzip, sed, grep, awk, cut, tr, etc.
 
 ## The pipeline
 
