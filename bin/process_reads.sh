@@ -133,6 +133,8 @@ while IFS=$'\t' read -r SAMPLE R1 R2 || [ $SAMPLE ] ; do
                 -k ${OUT_QC}/${SAMPLE}.trim.kmer.txt \
                 -o ${OUT_QC}/${SAMPLE}.trim.summary.txt \
                 > ${OUT_TRIM}/${SAMPLE}.trim.fq.gz
+        else
+            echo "        Skipping trimming SE reads"
         fi
     else
         if [ ! -f ${OUT_TRIM}/${SAMPLE}.trim.fq.gz ] || [ ! -z $FORCE ] ; then
@@ -148,6 +150,8 @@ while IFS=$'\t' read -r SAMPLE R1 R2 || [ $SAMPLE ] ; do
                 -k ${OUT_QC}/${SAMPLE}.trim.kmer.txt \
                 -o ${OUT_QC}/${SAMPLE}.trim.summary.txt \
                 > ${OUT_TRIM}/${SAMPLE}.trim.fq.gz
+        else
+            echo "        Skipping merging PE reads"
         fi
     fi
 
@@ -158,6 +162,8 @@ while IFS=$'\t' read -r SAMPLE R1 R2 || [ $SAMPLE ] ; do
         echo "        Aligning reads ..."
         $BWA bwa aln -o 0 -t ${BWA_THREADS} ${INDEX} \
             ${OUT_TRIM}/${SAMPLE}.trim.fq.gz 2> tmp_err > ${OUT_BAM}/${SAMPLE}.sai
+    else
+        echo "        Skipping aligning reads"
     fi
     if [ ! -f ${OUT_BAM}/${SAMPLE}.sort.bam ] || [ ! -z $FORCE ] ; then
         echo "        Filtering and sorting alignments ..."
@@ -170,6 +176,8 @@ while IFS=$'\t' read -r SAMPLE R1 R2 || [ $SAMPLE ] ; do
         $SAMTOOLS samtools index ${OUT_BAM}/${SAMPLE}.sort.bam 2> tmp_err
         $SAMTOOLS samtools flagstat ${OUT_BAM}/${SAMPLE}.sort.bam 2> tmp_err \
             > ${OUT_QC}/${SAMPLE}.aln.txt
+    else
+        echo "        Skipping filtering and sorting alignments"
     fi
 
     if [ ! -d ${OUT_TAGDIR}/${SAMPLE} ] || [ ! -z $FORCE ] ; then
@@ -179,6 +187,8 @@ while IFS=$'\t' read -r SAMPLE R1 R2 || [ $SAMPLE ] ; do
         $HOMER makeTagDirectory ${OUT_TAGDIR}/${SAMPLE} \
             ${OUT_BAM}/${SAMPLE}.sort.sam -genome tair10 -checkGC 2> tmp_err
         rm ${OUT_BAM}/${SAMPLE}.sort.sam
+    else
+        echo "        Skipping creating tag directory"
     fi
 
     if [ `echo ${SAMPLE} | grep "_cs[0-9][0-9]*"` ] ; then
