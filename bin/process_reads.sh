@@ -27,7 +27,7 @@ OUT_TAGDIR="./tagdir"
 SAMPLE_SHEET="./samples-processed.txt"
 FORCE=
 
-alias echo='echo "["$(date +"%Y-%m-%d %T")"]" '
+# alias echo='echo "["$(date +"%Y-%m-%d %T")"]" '
 
 help() {
     echo "csRNA-seq pre-processing: Process raw reads & gather QC data"
