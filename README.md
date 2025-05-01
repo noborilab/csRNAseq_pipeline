@@ -18,7 +18,7 @@ The scripts included in this pipeline allow for going from raw reads to a final 
 
 ### Part 1: `process_reads.sh`
 
-This first script processes the raw reads and outputs HOMER tag directories, which are used by all other downstream scripts. Single-end reads are trimmed with bfqtrimse, and paired-end reads are merged using bfqmerge. Trimmed reads are aligned to a genome using bwa-aln and filtered, finally allowing for the creation of tag directories.
+This first script processes the raw reads and outputs HOMER tag directories, which are used by all other downstream scripts. Single-end reads are trimmed with bfqtrimse, and paired-end reads are merged using bfqmerge. Trimmed reads are aligned to a genome using bwa-aln and filtered, finally allowing for the creation of tag directories. I recommend using an mapping quality score of at least 30 for filtering the alignments, though a slightly lower threshold of 25 can allow in more true positive alignments without too many accompanying false positives. (See [this link](https://lh3.github.io/2024/09/28/why-is-bwa-aln-still-used) for a discussion on what these scores mean in this context.) Personally I prefer the stricter score, since many false positive alignments tend to pile up in shared single positions and thus can very much resemble TSSs.
 
 ### Part 2: `identify_tss.sh`
 
