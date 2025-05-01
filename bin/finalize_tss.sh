@@ -10,6 +10,7 @@ set -e
 WD=`pwd`
 
 INPUT=
+IN_SRNA=
 IN_TSS="./tss"
 IN_BED="./tss_bed"
 OUT_BW="./bw"
@@ -24,6 +25,7 @@ help() {
     echo
     echo "Options:"
     echo "-i   TSV with 4 columns: 1) sample name, 2) rep #, 3) tagdirs path, 4) bedGraphs path."
+    echo "-s   Mask contaminating small RNAs (in a BED file) from the output bigWigs."
     echo "-t   Dir containing for per-sample TSSs (default=${IN_TSS})"
     echo "-b   Dir containing pre-sample TSS BED files (default=${IN_BED})"
     echo "-o   Output dir for final TSSs, and raw+normalized quantification tables (default=${OUT_FINAL})"
@@ -37,9 +39,10 @@ help() {
     exit 1
 }
 
-while getopts "i:t:b:o:w:fh" opt; do
+while getopts "i:s:t:b:o:w:fh" opt; do
     case $opt in
         i) INPUT=$OPTARG;;
+        s) IN_SRNA=$OPTARG;;
         t) IN_TSS=$OPTARG;;
         b) IN_BED=$OPTARG;;
         o) OUT_FINAL=$OPTARG;;
@@ -153,12 +156,23 @@ if [ ! -f ${OUT_FINAL}/tss.homer.raw.txt ] || [ ! -z $FORCE_QUANT ] ; then
 fi
 
 echo "Normalizing counts & making bigWigs ..."
+[ ! -z $IN_SRNA ] && echo "    Will mask sRNAs from bigWigs ..."
 
 $RSCRIPT Rscript -e "
 library(edgeR)
 library(rtracklayer)
 
 input <- read.table(trimws(\"$INPUT\"), stringsAsFactors=FALSE)
+tss <- import(paste0(\"$OUT_FINAL\", '/tss.final.bed'))
+srna <- trimws(\"$IN_SRNA\")
+if (nchar(srna)) {
+    srna <- import(srna)
+    srna <- srna[!overlapsAny(srna, tss, ignore.strand = FALSE)]
+    srna_p <- srna[as.character(strand(srna)) == '+']
+    srna_n <- srna[as.character(strand(srna)) == '-']
+} else {
+    srna <- NULL
+}
 
 quant <- as.data.frame(readr::read_tsv(trimws(\"${OUT_FINAL}/tss.homer.raw.txt\")))
 quant_m <- as.matrix(quant[, 20:ncol(quant)])
@@ -197,6 +211,10 @@ for (i in seq_along(samples)) {
     seqlevels(bg_n) <- as.character(1:5)
     seqlengths(bg_p) <- SL
     seqlengths(bg_n) <- SL
+    if (!is.null(srna)) {
+        bg_p <- bg_p[!overlapsAny(bg_p, srna_p)]
+        bg_n <- bg_n[!overlapsAny(bg_p, srna_p)]
+    }
     export.bw(bg_p, paste0(\"$OUT_BW/\", samples[i], '.rpm.pos.bw'))
     export.bw(bg_n, paste0(\"$OUT_BW/\", samples[i], '.rpm.neg.bw'))
 }
