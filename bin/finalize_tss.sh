@@ -213,7 +213,7 @@ for (i in seq_along(samples)) {
     seqlengths(bg_n) <- SL
     if (!is.null(srna)) {
         bg_p <- bg_p[!overlapsAny(bg_p, srna_p)]
-        bg_n <- bg_n[!overlapsAny(bg_p, srna_p)]
+        bg_n <- bg_n[!overlapsAny(bg_n, srna_n)]
     }
     export.bw(bg_p, paste0(\"$OUT_BW/\", samples[i], '.rpm.pos.bw'))
     export.bw(bg_n, paste0(\"$OUT_BW/\", samples[i], '.rpm.neg.bw'))
