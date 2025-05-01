@@ -2,7 +2,7 @@
 #
 # Author: Benjamin Jean-Marie Tremblay (benjamin.tremblay@tsl.ac.uk)
 # Date created: 10 March 2025
-# Date modified: 25 April 2025
+# Date modified: 1 May 2025
 #
 
 set -eo pipefail
@@ -18,12 +18,13 @@ OUT_FINAL="."
 SKIP_TSS=
 SKIP_BG=
 FORCE=
+USE_REL=
 
 help() {
     echo "csRNA-seq post-processing part 1: Identify TSSs, quantify them, and make bedGraphs"
     echo "Benjamin Jean-Marie Tremblay (2025)"
     echo
-    echo "Requirements: homer (+tair10), bedtools, R (+rtracklayer)"
+    echo "Requirements: homer (+tair10), bedtools"
     echo
     echo "Options:"
     echo "-i   TSV with 3 columns: 1) sample name, 2) rep #, 3) tagdir path."
@@ -35,15 +36,16 @@ help() {
     echo "-s   Skip TSS identification"
     echo "-b   Skip bedGraph creation"
     echo "-f   Force re-run of TSS ID & bedGraphs steps for which output files already exist."
+    echo "-r   Use relative paths for output sample sheet."
     echo "-h   Show this message"
     echo
     echo "If using containers, set the following variables in your env:"
-    echo '$HOMER, $BEDTOOLS, $RSCRIPT'
+    echo '$HOMER, $BEDTOOLS'
     echo '(e.g. export HOMER="singularity exec /path/to/containers/homer.img")'
     exit 1
 }
 
-while getopts "i:o:g:t:b:O:sbfh" opt; do
+while getopts "i:o:g:t:b:O:sbfrh" opt; do
     case $opt in
         i) INPUT=$OPTARG;;
         o) SAMPLE_SHEET=$OPTARG;;
@@ -54,6 +56,7 @@ while getopts "i:o:g:t:b:O:sbfh" opt; do
         s) SKIP_TSS="skip";;
         b) SKIP_BG="skip";;
         f) FORCE="force";;
+        r) USE_REL="userel";;
         h) help;;
         ?) help;;
     esac
@@ -75,6 +78,7 @@ touch ./tmp_err
 
 printErr() {
     cd $WD
+    echo "ERROR: Stopping"
     echo "See error log: `realpath ./tmp_err`"
     echo "Printing last lines ..."
     echo "--------------"
@@ -111,10 +115,10 @@ while IFS=$'\t' read -r SAMPLE REP TAGDIRS || [ $SAMPLE ] ; do
     [ -z $SAMPLE ] && continue
     [ -z $REP ] && { echo "Error: missing rep # for sample $SAMPLE"; exit 1; }
     [ -z $TAGDIRS ] && { echo "Error: missing tagdirs path for sample $SAMPLE"; exit 1; }
-    echo "    Working on sample: $SAMPLE"
+    echo "    Working on sample: $SAMPLE r${REP}"
 
     if [ -z $SKIP_TSS ] ; then
-        if [ ! -f ${OUT_BED}/${SAMPLE}_cs${REP}_tss.bed ] || [ ! -z $FORCE ] ; then
+        if [ ! -f ${OUT_BED}/${SAMPLE}_cs${REP}.tss.bed ] || [ ! -z $FORCE ] ; then
             $HOMER findcsRNATSS.pl ${TAGDIRS}/${SAMPLE}_cs${REP} \
                 -o ${OUT_TSS}/${SAMPLE}_cs${REP} \
                 -i ${TAGDIRS}/${SAMPLE}_in${REP} \
@@ -129,7 +133,7 @@ while IFS=$'\t' read -r SAMPLE REP TAGDIRS || [ $SAMPLE ] ; do
     cat ${OUT_BED}/${SAMPLE}_cs${REP}.tss.bed >> ${OUT_BED}/all_cs.tss.bed
 
     if [ -z $SKIP_TSS ] ; then
-        if [ ! -f ${OUT_BED}/${SAMPLE}_in${REP}_tss.bed ] || [ ! -z $FORCE ] ; then
+        if [ ! -f ${OUT_BED}/${SAMPLE}_in${REP}.tss.bed ] || [ ! -z $FORCE ] ; then
             $HOMER findcsRNATSS.pl ${TAGDIRS}/${SAMPLE}_in${REP} \
                 -o ${OUT_TSS}/${SAMPLE}_in${REP} \
                 -i ${TAGDIRS}/${SAMPLE}_cs${REP} \
@@ -196,7 +200,15 @@ while IFS=$'\t' read -r SAMPLE REP TAGDIRS || [ $SAMPLE ] ; do
         fi
     fi
 
-    printf "${SAMPLE}\t${REP}\t${TAGDIRS}\t${OUT_BG}\n" >> ${SAMPLE_SHEET}
+    if [ -z ${USE_REL} ] ; then 
+        TAGDIRS_O=`realpath ${TAGDIRS}`
+        OUT_BG_O=`realpath ${OUT_BG}`
+        printf "${SAMPLE}\t${REP}\t${TAGDIRS_O}\t${OUT_BG_O}\n" >> ${SAMPLE_SHEET}
+    else
+        TAGDIRS_O=`realpath --relative-to=. ${TAGDIRS}`
+        OUT_BG_O=`realpath --relative-to=. ${OUT_BG}`
+        printf "${SAMPLE}\t${REP}\t./${TAGDIRS_O}\t./${OUT_BG_O}\n" >> ${SAMPLE_SHEET}
+    fi
 
 done < ./tmp_input
 
@@ -209,21 +221,15 @@ $BEDTOOLS bedtools sort -i ${OUT_BED}/all_cs.tss.bed \
 $BEDTOOLS bedtools sort -i ${OUT_BED}/all_in.tss.bed \
     > ${OUT_FINAL}/all_in.tss.sort.bed
 
-cd $OUT_FINAL
-$RSCRIPT Rscript -e '
-library(rtracklayer);
-tss <- import("all_cs.tss.sort.bed");
-tss <- sort(reduce(tss, ignore.strand = FALSE));
-tss <- tss[as.character(seqnames(tss)) %in% as.character(1:5), ];
-tss$name <- paste0("TSS_", 1:length(tss));
-export.bed(tss, "all_cs.tss_merged.bed");
-tss <- import("all_in.tss.sort.bed");
-tss <- sort(reduce(tss, ignore.strand = FALSE));
-tss <- tss[as.character(seqnames(tss)) %in% as.character(1:5), ];
-tss$name <- paste0("sRNA_", 1:length(tss));
-export.bed(tss, "all_in.tss_merged.bed");
-'
-cd $WD
+$BEDTOOLS bedtools merge -s -c 6 -o distinct -i ${OUT_FINAL}/all_cs.tss.sort.bed \
+| $BEDTOOLS bedtools sort -i stdin \
+| awk 'BEGIN{IFS="\t";OFS="\t"}{if ($1!="Mt" && $1!="Pt") {print $1,$2,$3,"TSS_" NR,"0",$4}}' \
+    > ${OUT_FINAL}/all_cs.tss_merged.bed
+
+$BEDTOOLS bedtools merge -s -c 6 -o distinct -i ${OUT_FINAL}/all_in.tss.sort.bed \
+| $BEDTOOLS bedtools sort -i stdin \
+| awk 'BEGIN{IFS="\t";OFS="\t"}{if ($1!="Mt" && $1!="Pt") {print $1,$2,$3,"TSS_" NR,"0",$4}}' \
+    > ${OUT_FINAL}/all_in.tss_merged.bed
 
 NTSS_CS_FINAL=`cat ${OUT_FINAL}/all_cs.tss_merged.bed | wc -l`
 NTSS_IN_FINAL=`cat ${OUT_FINAL}/all_in.tss_merged.bed | wc -l`

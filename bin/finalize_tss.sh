@@ -11,7 +11,7 @@ WD=`pwd`
 
 INPUT=
 IN_TSS="./tss"
-IN_BED="./bed"
+IN_BED="./tss_bed"
 OUT_BW="./bw"
 OUT_FINAL="."
 FORCE_QUANT=
@@ -68,6 +68,7 @@ touch ./tmp_err
 
 printErr() {
     cd $WD
+    echo "ERROR: Stopping"
     echo "See error log: `realpath ./tmp_err`"
     echo "Printing last lines ..."
     echo "--------------"

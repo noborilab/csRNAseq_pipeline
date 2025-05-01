@@ -2,7 +2,7 @@
 #
 # Author: Benjamin Jean-Marie Tremblay (benjamin.tremblay@tsl.ac.uk)
 # Date created: 23 April 2025
-# Date modified: 24 April 2025
+# Date modified: 1 May 2025
 #
 
 XARGS=xargs
@@ -26,6 +26,8 @@ OUT_BAM="./bam"
 OUT_TAGDIR="./tagdir"
 SAMPLE_SHEET="./samples-processed.txt"
 FORCE=
+USE_REL=
+DEL_SAI=
 
 # alias echo='echo "["$(date +"%Y-%m-%d %T")"]" '
 
@@ -52,6 +54,8 @@ help() {
     echo "-t   Output dir for tag directories. (default=${OUT_TAGDIR})"
     echo "-f   Force re-run of alignment and/or tag directory creation even"
     echo "     if existing files/folders are present."
+    echo "-r   Use relative paths in output sample sheet."
+    echo "-d   Delete .sai files after alignment."
     echo "-h   Show this message."
     echo
     echo "If using containers, set the following variables in your env:"
@@ -60,7 +64,7 @@ help() {
     exit 1
 }
 
-while getopts "i:o:a:m:I:j:J:k:Q:q:T:b:t:fh" opt ; do
+while getopts "i:o:a:m:I:j:J:k:Q:q:T:b:t:frdh" opt ; do
     case $opt in 
         i) INPUT=$OPTARG;;
         o) SAMPLE_SHEET=$OPTARG;;
@@ -76,6 +80,8 @@ while getopts "i:o:a:m:I:j:J:k:Q:q:T:b:t:fh" opt ; do
         b) OUT_BAM=$OPTARG;;
         t) OUT_TAGDIR=$OPTARG;;
         f) FORCE="force";;
+        r) USE_REL="userel";;
+        d) DEL_SAI="delsai";;
         h) help;;
         ?) help;;
     esac
@@ -97,6 +103,7 @@ touch ./tmp_err
 
 printErr() {
     cd $WD
+    echo "ERROR: Stopping"
     echo "See error log: `realpath ./tmp_err`"
     echo "Printing last lines ..."
     echo "--------------"
@@ -185,20 +192,21 @@ while IFS=$'\t' read -r SAMPLE R1 R2 || [ $SAMPLE ] ; do
     TOTAL_READS=`head -n 1 ${OUT_QC}/${SAMPLE}.trimming.txt | awk '{print $2}'`
     FINAL_READS=`tail -n 1 ${OUT_QC}/${SAMPLE}.trimming.txt | awk '{print $2}'`
 
-    if [ ! -f ${OUT_BAM}/${SAMPLE}.sai ] || [ ! -z $FORCE ] ; then
-        echo "        Aligning reads ..."
-        $BWA bwa aln -o 0 -t ${BWA_THREADS} ${INDEX} \
-            ${OUT_TRIM}/${SAMPLE}.trim.fq.gz 2> tmp_err > ${OUT_BAM}/${SAMPLE}.sai
-    else
-        echo "        Skipping aligning reads"
-    fi
     if [ ! -f ${OUT_BAM}/${SAMPLE}.sort.bam ] || [ ! -z $FORCE ] ; then
+        if [ ! -f ${OUT_BAM}/${SAMPLE}.sai ] || [ ! -z $FORCE ] ; then
+            echo "        Aligning reads ..."
+            $BWA bwa aln -o 0 -t ${BWA_THREADS} ${INDEX} \
+                ${OUT_TRIM}/${SAMPLE}.trim.fq.gz 2> tmp_err > ${OUT_BAM}/${SAMPLE}.sai
+        else
+            echo "        Skipping aligning reads"
+        fi
         echo "        Filtering and sorting alignments ..."
-        $BWA bwa samse ${INDEX} ${OUT_BAM}/${SAMPLE}.sai ${INDEX} \
+        $BWA bwa samse ${INDEX} ${OUT_BAM}/${SAMPLE}.sai ${OUT_TRIM}/${SAMPLE}.trim.fq.gz \
             ${OUT_TRIM}/${SAMPLE}.trim.fq.gz 2> tmp_err \
         | $SAMTOOLS samtools view -F 2308 -q ${BWA_MAPQ} -b - \
         | $SAMTOOLS samtools sort --verbosity 0 -@ ${SAM_THREADS} \
             -o ${OUT_BAM}/${SAMPLE}.sort.bam -
+        [ ! -z $DEL_SAI ] && rm ${OUT_BAM}/${SAMPLE}.sai
         echo "        Getting alignment stats ..."
         $SAMTOOLS samtools index ${OUT_BAM}/${SAMPLE}.sort.bam 2> tmp_err
         $SAMTOOLS samtools flagstat ${OUT_BAM}/${SAMPLE}.sort.bam 2> tmp_err \
@@ -221,19 +229,24 @@ while IFS=$'\t' read -r SAMPLE R1 R2 || [ $SAMPLE ] ; do
     if [ `echo ${SAMPLE} | grep "_cs[0-9][0-9]*"` ] ; then
         SAMPLE_NAME=`echo ${SAMPLE} | sed 's/_cs[0-9][0-9]*//g'`
         SAMPLE_REP=`echo ${SAMPLE} | grep -o "_cs[0-9][0-9]*" | grep -o "[0-9][0-9]*"`
-        printf "${SAMPLE_NAME}\t${SAMPLE_REP}\t${OUT_TAGDIR}\n" >> ${SAMPLE_SHEET}
+        if [ -z ${USE_REL} ] ; then
+            SAMPLE_TAGDIR=`realpath ${OUT_TAGDIR}`
+        else
+            SAMPLE_TAGDIR=${OUT_TAGDIR}
+        fi
+        printf "${SAMPLE_NAME}\t${SAMPLE_REP}\t${SAMPLE_TAGDIR}\n" >> ${SAMPLE_SHEET}
     fi
 
-    MAPPED_READS=`grep "primary mapped" ${OUT_QC}/$SAMPLE}.aln.txt | awk '{print $1}'`
+    MAPPED_READS=`grep "primary mapped" ${OUT_QC}/${SAMPLE}.aln.txt | awk '{print $1}'`
 
-    echo "    >>> Finished sample ${SAMPLE}"
+    echo "        Finished sample ${SAMPLE}"
     if [ -z $R2 ] ; then
-        echo "        Starting read count: ${TOTAL_READS}"
+        echo "            Starting read count: ${TOTAL_READS}"
     else 
-        echo "        Starting read pairs: ${TOTAL_READS}"
+        echo "            Starting read pairs: ${TOTAL_READS}"
     fi
-    echo "        Final read count: ${FINAL_READS}"
-    echo "        Aligned reads: ${MAPPED_READS}"
+    echo "            Final read count: ${FINAL_READS}"
+    printf "            Aligned reads: %'d\n" ${MAPPED_READS}
 
 done < ./tmp_input
 

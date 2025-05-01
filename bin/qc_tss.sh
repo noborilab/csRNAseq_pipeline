@@ -116,10 +116,8 @@ stats_cs[['InputCappedPct']] <- 100 * stats_in[['csFRiP']]
 stats_cs[['csEnrichment']] <- stats_cs[['csFRiP']] / stats_in[['csFRiP']]
 stats_cs[['sDepletion']] <- 1 / (stats_cs[['sFRiP']] / stats_in[['sFRiP']])
 
-in_pretrna <- mcols(tss_in)[['name']][overlapsAny(tss_in, trna)]
-in_mirna <- mcols(tss_in)[['name']][overlapsAny(tss_in, mirna)]
-
 if (!is.null(trna)) {
+    in_pretrna <- mcols(tss_in)[['name']][overlapsAny(tss_in, trna)]
     stats_cs[['PretRNA']] <- colSums(quant_inTSS_csRNA_m[quant_inTSS_csRNA[[1]] %in% in_pretrna, ])[stats_cs[['Sample']]]
     stats_in[['PretRNA']] <- colSums(quant_inTSS_input_m[quant_inTSS_input[[1]] %in% in_pretrna, ])[stats_in[['Sample']]]
     stats_cs[['PretRNAPct']] <- with(stats_cs, 100 * (PretRNA / (PretRNA + csRiP)))
@@ -128,12 +126,13 @@ if (!is.null(trna)) {
 }
 
 if (!is.null(mirna)) {
+    in_mirna <- mcols(tss_in)[['name']][overlapsAny(tss_in, mirna)]
     stats_cs[['miRNA']] <- colSums(quant_inTSS_csRNA_m[quant_inTSS_csRNA[[1]] %in% in_mirna, ])[stats_cs[['Sample']]]
     stats_in[['miRNA']] <- colSums(quant_inTSS_input_m[quant_inTSS_input[[1]] %in% in_mirna, ])[stats_in[['Sample']]]
     stats_cs[['miRNADepletion']] <- 1 / ((stats_cs[['miRNA']] / stats_cs[['NuclearReads']]) / (stats_in[['miRNA']] / stats_in[['NuclearReads']]))
 }
 
-stats_cs[['Status']] <- ifelse(stats_cs[['csFRiP']] > .6 & stats_cs[['PctNuclear']] > 90, 'Ok', 'FAIL')
+stats_cs[['Status']] <- ifelse(stats_cs[['csFRiP']] > .7 & stats_cs[['PctNuclear']] > 90, 'Ok', 'FAIL')
 
 readr::write_tsv(stats_cs, \"$OUT_DIR/qc_cs.txt\")
 readr::write_tsv(stats_in, \"$OUT_DIR/qc_in.txt\")
