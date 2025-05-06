@@ -2,11 +2,11 @@
 #
 # Author: Benjamin Jean-Marie Tremblay (benjamin.tremblay@tsl.ac.uk)
 # Date created: 23 April 2025
-# Date modified: 1 May 2025
+# Date modified: 6 May 2025
 #
 
 XARGS=xargs
-xargs --version 2> /dev/null || XARGS="xargs -S 16384"
+xargs --version &> /dev/null || XARGS="xargs -S 16384"
 
 set -eo pipefail
 
