@@ -2,7 +2,7 @@
 #
 # Author: Benjamin Jean-Marie Tremblay (benjamin.tremblay@tsl.ac.uk)
 # Date created: 10 March 2025
-# Date modified: 25 April 2025
+# Date modified: 14 May 2025
 #
 
 # From quant files: RiPs
@@ -17,6 +17,8 @@ PART1_DIR="."
 OUT_DIR="."
 TRNAS=
 MIRNAS=
+CSFRIP=0.7
+PCTNUC=90
 
 help() {
     echo "csRNA-seq post-processing part 2: quality control checks"
@@ -27,6 +29,8 @@ help() {
     echo "Options:"
     echo "-d   Path to dir containing outputs from part 1 (default=$PART1_DIR)"
     echo "-o   Output dir for final QC stats (default=$OUT_FILE)"
+    echo "-c   csRNA-seq FRiP cutoff (default=$CSFRIP)"
+    echo "-n   Percent nuclear reads cutoff (default=$PCTNUC)"
     echo "-t   Path to BED file containing locations of tRNAs (optional)"
     echo "-m   Path to BED file containing locations of miRNAs (optional)"
     echo "-h   Show this message"
@@ -37,10 +41,12 @@ help() {
     exit 1
 }
 
-while getopts "i:d:o:t:m:h" opt; do
+while getopts "i:d:o:c:n:t:m:h" opt; do
     case $opt in
         d) PART1_DIR=$OPTARG;;
         o) OUT_FILE=$OPTARG;;
+        c) CSFRIP=$OPTARG;;
+        n) PCTNUC=$OPTARG;;
         t) TRNAS=$OPTARG;;
         m) MIRNAS=$OPTARG;;
         h) help;;
@@ -61,10 +67,6 @@ echo "Aggregating QC stats ..."
 
 $RSCRIPT Rscript -e "
 library(rtracklayer)
-
-# Pass:
-# - csFRiP > 0.6
-# - PctNuclear > 90
 
 tss_cs <- import(trimws(\"$TSS_CS\"))
 tss_in <- import(trimws(\"$TSS_IN\"))
@@ -132,7 +134,7 @@ if (!is.null(mirna)) {
     stats_cs[['miRNADepletion']] <- 1 / ((stats_cs[['miRNA']] / stats_cs[['NuclearReads']]) / (stats_in[['miRNA']] / stats_in[['NuclearReads']]))
 }
 
-stats_cs[['Status']] <- ifelse(stats_cs[['csFRiP']] > .7 & stats_cs[['PctNuclear']] > 90, 'Ok', 'FAIL')
+stats_cs[['Status']] <- ifelse(stats_cs[['csFRiP']] > $CSFRIP & stats_cs[['PctNuclear']] > $PCTNUC, 'Ok', 'FAIL')
 
 readr::write_tsv(stats_cs, \"$OUT_DIR/qc_cs.txt\")
 readr::write_tsv(stats_in, \"$OUT_DIR/qc_in.txt\")
