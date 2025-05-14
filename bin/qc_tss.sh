@@ -28,7 +28,7 @@ help() {
     echo
     echo "Options:"
     echo "-d   Path to dir containing outputs from part 1 (default=$PART1_DIR)"
-    echo "-o   Output dir for final QC stats (default=$OUT_FILE)"
+    echo "-o   Output dir for final QC stats (default=$OUT_DIR)"
     echo "-c   csRNA-seq FRiP cutoff (default=$CSFRIP)"
     echo "-n   Percent nuclear reads cutoff (default=$PCTNUC)"
     echo "-t   Path to BED file containing locations of tRNAs (optional)"
@@ -44,7 +44,7 @@ help() {
 while getopts "i:d:o:c:n:t:m:h" opt; do
     case $opt in
         d) PART1_DIR=$OPTARG;;
-        o) OUT_FILE=$OPTARG;;
+        o) OUT_DIR=$OPTARG;;
         c) CSFRIP=$OPTARG;;
         n) PCTNUC=$OPTARG;;
         t) TRNAS=$OPTARG;;
