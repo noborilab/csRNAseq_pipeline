@@ -130,15 +130,6 @@ sampleTSSs <- function(s, fn, n) {
 for (i in seq_along(samples)) {
     input_i <- input[input[[1]] %in% samples[i], ]
     samples_i <- paste0(\"${IN_BED}\", '/', input_i[[1]], '_cs', input_i[[2]], '.tss.bed')
-    #tss_i <- import(samples_i[1])
-    #for (j in seq_along(samples_i[-1])) {
-    #    tss_j <- import(samples_i[1 + j])
-    #    tss_i <- tss_i[overlapsAny(tss_i, tss_j, ignore.strand=FALSE), ]
-    #    tss_i <- sort(reduce(sort(c(tss_i, tss_j[overlapsAny(tss_j, tss_i, ignore.strand=FALSE), ]))))
-    #}
-    #tss_i <- sort(reduce(sort(tss_i)))
-    #tss_all[[i]] <- tss_i
-    #cat('    ', samples[i], ':\t', length(tss_i), ' TSSs\n', sep = '')
     tss_all[[i]] <- sampleTSSs(samples[i], samples_i, nreps)
 }
 tss <- do.call(c, tss_all)
