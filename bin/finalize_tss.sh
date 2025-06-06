@@ -107,18 +107,39 @@ print(input)
 samples <- unique(input[[1]])
 tss_all <- vector('list', length(samples))
 cat(paste0('Getting sample TSS counts, requiring at least n=', nreps, ':\n'))
+sampleTSSs <- function(s, fn, n) {
+    if (length(fn) == 1) {
+        tss <- sort(reduce(sort(import(fn))))
+    } else {
+        tss <- lapply(fn, import)
+        for (i in seq_along(tss)) {
+            mcols(tss[[i]])[['overlaps']] <- FALSE
+            for (j in seq_along(tss)[-i]) {
+                mcols(tss[[i]])[['overlaps']] <- mcols(tss[[i]])[['overlaps']] | overlapsAny(tss[[i]], tss[[j]], ignore.strand=FALSE)
+            }
+        }
+        for (i in seq_along(tss)) {
+            tss[[i]] <- tss[[i]][mcols(tss[[i]])[['overlaps']]]
+        }
+        tss <- do.call(c, tss)
+        tss <- sort(reduce(sort(tss)))
+    }
+    cat('    ', s, ':\t', length(tss), ' TSSs\n', sep = '')
+    tss
+}
 for (i in seq_along(samples)) {
     input_i <- input[input[[1]] %in% samples[i], ]
     samples_i <- paste0(\"${IN_BED}\", '/', input_i[[1]], '_cs', input_i[[2]], '.tss.bed')
-    tss_i <- import(samples_i[1])
-    for (j in seq_along(samples_i[-1])) {
-        tss_j <- import(samples_i[1 + j])
-        tss_i <- tss_i[overlapsAny(tss_i, tss_j, ignore.strand=FALSE), ]
-        tss_i <- sort(reduce(sort(c(tss_i, tss_j[overlapsAny(tss_j, tss_i, ignore.strand=FALSE), ]))))
-    }
-    tss_i <- sort(reduce(sort(tss_i)))
-    tss_all[[i]] <- tss_i
-    cat('    ', samples[i], ':\t', length(tss_i), ' TSSs\n', sep = '')
+    #tss_i <- import(samples_i[1])
+    #for (j in seq_along(samples_i[-1])) {
+    #    tss_j <- import(samples_i[1 + j])
+    #    tss_i <- tss_i[overlapsAny(tss_i, tss_j, ignore.strand=FALSE), ]
+    #    tss_i <- sort(reduce(sort(c(tss_i, tss_j[overlapsAny(tss_j, tss_i, ignore.strand=FALSE), ]))))
+    #}
+    #tss_i <- sort(reduce(sort(tss_i)))
+    #tss_all[[i]] <- tss_i
+    #cat('    ', samples[i], ':\t', length(tss_i), ' TSSs\n', sep = '')
+    tss_all[[i]] <- sampleTSSs(samples[i], samples_i, nreps)
 }
 tss <- do.call(c, tss_all)
 tss <- sort(reduce(sort(tss)))
@@ -150,7 +171,7 @@ if (length(tssOvs)) {
 mcols(tss)[['name']] <- paste0('TSS_', 1:length(tss));
 cat('Final TSS count: ', length(tss), '\n', sep = '')
 export.bed(tss, paste0(\"$OUT_FINAL\", '/tss.final.bed'))
-"
+" 2> ./tmp_err
 
 echo "Getting raw counts data for merged TSSs ..."
 
@@ -225,7 +246,7 @@ for (i in seq_along(samples)) {
     export.bw(bg_p, paste0(\"$OUT_BW/\", samples[i], '.rpm.pos.bw'))
     export.bw(bg_n, paste0(\"$OUT_BW/\", samples[i], '.rpm.neg.bw'))
 }
-"
+" 2> ./tmp_err
 
 echo "All done."
 
