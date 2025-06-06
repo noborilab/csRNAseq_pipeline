@@ -15,6 +15,7 @@ IN_TSS="./tss"
 IN_BED="./tss_bed"
 OUT_BW="./bw"
 OUT_FINAL="."
+N_REPS=2
 FORCE_QUANT=
 
 help() {
@@ -30,6 +31,7 @@ help() {
     echo "-b   Dir containing pre-sample TSS BED files (default=${IN_BED})"
     echo "-o   Output dir for final TSSs, and raw+normalized quantification tables (default=${OUT_FINAL})"
     echo "-w   Output dir for final bigWigs (default=${OUT_BW})"
+    echo "-n   Number of reps a TSS must be present in for samples with n>1 (default=${N_REPS})"
     echo "-f   Force re-run of quantification even if the output file already exist."
     echo "-h   Show this message"
     echo
@@ -39,7 +41,7 @@ help() {
     exit 1
 }
 
-while getopts "i:s:t:b:o:w:fh" opt; do
+while getopts "i:s:t:b:o:w:n:fh" opt; do
     case $opt in
         i) INPUT=$OPTARG;;
         s) IN_SRNA=$OPTARG;;
@@ -47,6 +49,7 @@ while getopts "i:s:t:b:o:w:fh" opt; do
         b) IN_BED=$OPTARG;;
         o) OUT_FINAL=$OPTARG;;
         w) OUT_BW=$OPTARG;;
+        n) N_REPS=$OPTARG;;
         f) FORCE_QUANT="force";;
         h) help;;
         ?) help;;
@@ -98,8 +101,12 @@ echo "Finding consensus TSSs across reps and merging ..."
 $RSCRIPT Rscript -e "
 library(rtracklayer)
 input <- read.table(trimws(\"$INPUT\"), stringsAsFactors=FALSE)
+nreps <- as.integer(\"${N_REPS}\")
+cat('Read the following sample table:\n')
+print(input)
 samples <- unique(input[[1]])
 tss_all <- vector('list', length(samples))
+cat(paste0('Getting sample TSS counts, requiring at least n=', nreps, ':\n'))
 for (i in seq_along(samples)) {
     input_i <- input[input[[1]] %in% samples[i], ]
     samples_i <- paste0(\"${IN_BED}\", '/', input_i[[1]], '_cs', input_i[[2]], '.tss.bed')
