@@ -2,11 +2,13 @@
 #
 # Author: Benjamin Jean-Marie Tremblay (benjamin.tremblay@tsl.ac.uk)
 # Date created: 23 April 2025
-# Date modified: 6 May 2025
+# Date modified: 26 July 2025
 #
 
+echo "Checking which version of xargs is available..."
 XARGS=xargs
-xargs --version &> /dev/null || XARGS="xargs -S 16384"
+xargs --version &> /dev/null || XARGS="xargs -S 65536"
+echo "Ok."
 
 set -eo pipefail
 
@@ -189,8 +191,10 @@ while IFS=$'\t' read -r SAMPLE R1 R2 || [ $SAMPLE ] ; do
     [ -z $R1 ] && { echo "Error: missing R1 fastq for sample $SAMPLE"; exit 1; }
     [ -z $R2 ] && echo "        Found no R2 fastq, assuming SE."
 
+    # TODO: This isn't correct when a sample has multiple sequencing runs.
     TOTAL_READS=`head -n 1 ${OUT_QC}/${SAMPLE}.trimming.txt | awk '{print $2}'`
-    FINAL_READS=`tail -n 1 ${OUT_QC}/${SAMPLE}.trimming.txt | awk '{print $2}'`
+
+    FINAL_READS=`head -n 1 ${OUT_QC}/${SAMPLE}.trim.summary.txt | awk '{print $3}'`
 
     if [ ! -f ${OUT_BAM}/${SAMPLE}.sort.bam ] || [ ! -z $FORCE ] ; then
         if [ ! -f ${OUT_BAM}/${SAMPLE}.sai ] || [ ! -z $FORCE ] ; then
