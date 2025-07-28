@@ -2,7 +2,7 @@
 #
 # Author: Benjamin Jean-Marie Tremblay (benjamin.tremblay@tsl.ac.uk)
 # Date created: 10 March 2025
-# Date modified: 1 May 2025
+# Date modified: 28 July 2025
 #
 
 set -eo pipefail
@@ -194,7 +194,7 @@ while IFS=$'\t' read -r SAMPLE REP TAGDIRS || [ $SAMPLE ] ; do
             $HOMER makeUCSCfile ${TD_IN} -style tss -strand + -raw \
                 -o ${OUT_BG}/${SAMPLE}_in${REP}.raw.pos.bedGraph 2> tmp_err
         fi
-        if [ ! -f ${OUT_BG}/${SAMPLE}_in${REP}.raw.pos.bedGraph.gz ] || [ ! -z $FORCE ] ; then
+        if [ ! -f ${OUT_BG}/${SAMPLE}_in${REP}.raw.neg.bedGraph.gz ] || [ ! -z $FORCE ] ; then
             $HOMER makeUCSCfile ${TD_IN} -style tss -strand - -raw \
                 -o ${OUT_BG}/${SAMPLE}_in${REP}.raw.neg.bedGraph 2> tmp_err
         fi
