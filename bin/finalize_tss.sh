@@ -113,13 +113,13 @@ sampleTSSs <- function(s, fn, n) {
     } else {
         tss <- lapply(fn, import)
         for (i in seq_along(tss)) {
-            mcols(tss[[i]])[['overlaps']] <- FALSE
+            mcols(tss[[i]])[['overlaps']] <- 0
             for (j in seq_along(tss)[-i]) {
-                mcols(tss[[i]])[['overlaps']] <- mcols(tss[[i]])[['overlaps']] | overlapsAny(tss[[i]], tss[[j]], ignore.strand=FALSE)
+                mcols(tss[[i]])[['overlaps']] <- mcols(tss[[i]])[['overlaps']] + as.integer(overlapsAny(tss[[i]], tss[[j]], ignore.strand=FALSE))
             }
         }
         for (i in seq_along(tss)) {
-            tss[[i]] <- tss[[i]][mcols(tss[[i]])[['overlaps']]]
+            tss[[i]] <- tss[[i]][mcols(tss[[i]])[['overlaps']] >= (n - 1)]
         }
         tss <- do.call(c, tss)
         tss <- sort(reduce(sort(tss)))
