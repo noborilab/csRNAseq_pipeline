@@ -1,86 +1,31 @@
-#!/usr/bin/env bash
-#
-# Author: Benjamin Jean-Marie Tremblay (benjamin.tremblay@tsl.ac.uk)
-# Date created: 10 March 2025
-# Date modified: 14 May 2025
-#
+suppressMessages(suppressPackageStartupMessages(library(rtracklayer)))
 
-# From quant files: RiPs
-# From quant files + BED files: tRNAs, miRNAs
-# Fromt stats files: total reads, nuclear/pt/mt reads, pos1 A freq
+QUANT_csTSS_csRNA <- snakemake@input[["quant_cs_cs"]]
+QUANT_csTSS_input <- snakemake@input[["quant_cs_in"]]
+QUANT_inTSS_csRNA <- snakemake@input[["quant_in_cs"]]
+QUANT_inTSS_input <- snakemake@input[["quant_in_in"]]
+STATS_CS <- snakemake@input[["stats_cs"]]
+STATS_IN <- snakemake@input[["stats_in"]]
+TSS_CS <- snakemake@input[["tss_cs"]]
+TSS_IN <- snakemake@input[["tss_in"]]
+MIRNAS <- snakemake@params[["mirnas"]]
+TRNAS <- snakemake@params[["trnas"]]
+OUT_CS <- snakemake@output[["qc_cs"]]
+OUT_IN <- snakemake@output[["qc_in"]]
 
-set -e
+tss_cs <- import(trimws(TSS_CS))
+tss_in <- import(trimws(TSS_IN))
 
-WD=`pwd`
+stats_cs <- read.table(trimws(STATS_CS), header=TRUE, stringsAsFactors=FALSE)
+stats_in <- read.table(trimws(STATS_IN), header=TRUE, stringsAsFactors=FALSE)
 
-PART1_DIR="."
-OUT_DIR="."
-TRNAS=
-MIRNAS=
-CSFRIP=0.7
-PCTNUC=90
+quant_csTSS_csRNA <- suppressMessages(readr::read_tsv(trimws(QUANT_csTSS_csRNA)))
+quant_csTSS_input <- suppressMessages(readr::read_tsv(trimws(QUANT_inTSS_csRNA)))
+quant_inTSS_csRNA <- suppressMessages(readr::read_tsv(trimws(QUANT_csTSS_input)))
+quant_inTSS_input <- suppressMessages(readr::read_tsv(trimws(QUANT_inTSS_input)))
 
-help() {
-    echo "csRNA-seq post-processing part 2: quality control checks"
-    echo "Benjamin Jean-Marie Tremblay (2025)"
-    echo
-    echo "Requirements: R (+rtracklayer, +readr)"
-    echo
-    echo "Options:"
-    echo "-d   Path to dir containing outputs from part 1 (default=$PART1_DIR)"
-    echo "-o   Output dir for final QC stats (default=$OUT_DIR)"
-    echo "-c   csRNA-seq FRiP cutoff (default=$CSFRIP)"
-    echo "-n   Percent nuclear reads cutoff (default=$PCTNUC)"
-    echo "-t   Path to BED file containing locations of tRNAs (optional)"
-    echo "-m   Path to BED file containing locations of miRNAs (optional)"
-    echo "-h   Show this message"
-    echo
-    echo "If using containers, set the following variable in your env:"
-    echo '$RSCRIPT'
-    echo '(e.g. export RSCRIPT="singularity exec /path/to/containers/R.img")'
-    exit 1
-}
-
-while getopts "i:d:o:c:n:t:m:h" opt; do
-    case $opt in
-        d) PART1_DIR=$OPTARG;;
-        o) OUT_DIR=$OPTARG;;
-        c) CSFRIP=$OPTARG;;
-        n) PCTNUC=$OPTARG;;
-        t) TRNAS=$OPTARG;;
-        m) MIRNAS=$OPTARG;;
-        h) help;;
-        ?) help;;
-    esac
-done
-
-STATS_CS=$PART1_DIR/stats_cs.txt
-STATS_IN=$PART1_DIR/stats_in.txt
-TSS_CS=$PART1_DIR/all_cs.tss_merged.bed
-TSS_IN=$PART1_DIR/all_in.tss_merged.bed
-QUANT_csTSS_csRNA=$PART1_DIR/all_cs.tss_merged_quant_cs.txt
-QUANT_inTSS_csRNA=$PART1_DIR/all_cs.tss_merged_quant_in.txt
-QUANT_csTSS_input=$PART1_DIR/all_in.tss_merged_quant_cs.txt
-QUANT_inTSS_input=$PART1_DIR/all_in.tss_merged_quant_in.txt
-
-echo "Aggregating QC stats ..."
-
-$RSCRIPT Rscript -e "
-library(rtracklayer)
-
-tss_cs <- import(trimws(\"$TSS_CS\"))
-tss_in <- import(trimws(\"$TSS_IN\"))
-
-stats_cs <- read.table(trimws(\"$STATS_CS\"), header=TRUE, stringsAsFactors=FALSE)
-stats_in <- read.table(trimws(\"$STATS_IN\"), header=TRUE, stringsAsFactors=FALSE)
-
-quant_csTSS_csRNA <- readr::read_tsv(trimws(\"$QUANT_csTSS_csRNA\"))
-quant_csTSS_input <- readr::read_tsv(trimws(\"$QUANT_inTSS_csRNA\"))
-quant_inTSS_csRNA <- readr::read_tsv(trimws(\"$QUANT_csTSS_input\"))
-quant_inTSS_input <- readr::read_tsv(trimws(\"$QUANT_inTSS_input\"))
-
-f_mirna <- trimws(\"$MIRNAS\")
-f_trna <- trimws(\"$TRNAS\")
+f_mirna <- trimws(MIRNAS)
+f_trna <- trimws(TRNAS)
 
 mirna <- if (nchar(f_mirna)) import(f_mirna) else NULL
 trna <- if (nchar(f_trna)) import(f_trna) else NULL
@@ -134,15 +79,10 @@ if (!is.null(mirna)) {
     stats_cs[['miRNADepletion']] <- 1 / ((stats_cs[['miRNA']] / stats_cs[['NuclearReads']]) / (stats_in[['miRNA']] / stats_in[['NuclearReads']]))
 }
 
-stats_cs[['Status']] <- ifelse(stats_cs[['csFRiP']] > $CSFRIP & stats_cs[['PctNuclear']] > $PCTNUC, 'Ok', 'FAIL')
+stats_cs[['Status']] <- ifelse(stats_cs[['csFRiP']] > snakemake@config[["qc"]][["min_cs_frip"]] & stats_cs[['PctNuclear']] > snakemake@config[["qc"]][["min_pct_nuclear"]], 'Ok', 'FAIL')
 
-readr::write_tsv(stats_cs, \"$OUT_DIR/qc_cs.txt\")
-readr::write_tsv(stats_in, \"$OUT_DIR/qc_in.txt\")
+readr::write_tsv(stats_cs, OUT_CS)
+readr::write_tsv(stats_in, OUT_IN)
 
 cat('Printing summary stats:\n')
 print(cbind(stats_cs[, c('Sample', 'Status', 'PctNuclear', 'csFRiP')], csFRiP_in = stats_in[['csFRiP']]))
-"
-
-echo
-echo "All done."
-

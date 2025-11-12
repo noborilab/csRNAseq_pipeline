@@ -1,0 +1,21 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+description: Snakemake samples file
+properties:
+  sample_name:
+    type: string
+  sample_type:
+    enum:
+      - "csrna"
+      - "input"
+  replicate:
+    type: integer
+    default: 1
+  read_r1:
+    type: string
+  read_r2:
+    type: string
+    default: ""
+required:
+  - sample_name
+  - sample_type
+  - read_r1

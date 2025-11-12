@@ -1,0 +1,165 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+description: Snakemake configuration file
+type: object
+properties:
+  sample_table:
+    type: string
+    default: "config/samples.tsv"
+  chrom_sizes:
+    type: string
+  genome_fasta:
+    type: string
+  program:
+    type: object
+    properties:
+      genome_index:
+        type: string
+      bfqutils:
+        type: object
+        properties:
+          sequencing_adapter:
+            type: string
+            default: "AGATCGGAAGAGCACACGTCTGAACTCCAGTCA"
+          use_pigz:
+            type: boolean
+            default: False
+          pigz_threads:
+            type: integer
+            default: 4
+      max_read_length:
+        type: integer
+        default: 70
+      alignment_threads:
+        type: integer
+        default: 1
+      alignment_program:
+        enum:
+          - "bwa-aln"
+          - "bwa-mem"
+          - "STAR"
+          - "bowtie2"
+        default: "bwa-aln"
+      keep_trimmed_fastq:
+        type: boolean
+        default: True
+      keep_bam:
+        type: boolean
+        default: True
+      bwa_aln:
+        type: object
+        properties:
+          keep_sai:
+            type: boolean
+            default: True
+      bwa_mem:
+        type: object
+        properties:
+          w:
+            type: integer
+            default: 0
+          L:
+            type: integer
+            default: 999
+          O:
+            type: integer
+            default: 999
+      bowtie2:
+        type: object
+        properties:
+          extra_params:
+            type: string
+            default: "--very-sensitive"
+      star:
+        type: object
+        properties:
+          read_files_command:
+            type: string
+            default: "zcat"
+          align_ends_type:
+            type: string
+            default: "EndToEnd"
+          align_intron_max:
+            type: integer
+            default: 1
+          out_filter_multimap_nmax:
+            type: integer
+            default: 1000
+      homer:
+        type: object
+        properties:
+          genome:
+            type: string
+          tagdir:
+            type: object
+            properties:
+              extra_args:
+                type: string
+                default: "-checkGC"
+          tss:
+            type: object
+            properties:
+              size:
+                type: integer
+                default: 100
+              ntagthreshold:
+                type: integer
+                default: 5
+              extra_args:
+                type: string
+                default: "-includeSingleExons"
+          required:
+            - genome
+    required:
+      - genome_index
+      - homer
+  filtering:
+    type: object
+    properties:
+      alignment_mapq:
+        type: integer
+        default: 30
+      exclude_flags:
+        type: integer
+        default: 2308
+      include_flags:
+        type: integer
+        default: 0
+      min_alignment_length:
+        type: integer
+        default: 15
+      max_mismatch:
+        type: integer
+        default: 999
+      tss_min_reps:
+        type: integer
+        default: 1
+      mask_srnas_from_bw:
+        type: boolean
+        default: True
+  files:
+    type: object
+    properties:
+      output_dir:
+        type: string
+        default: "./"
+      intermediate_dir:
+        type: string
+        default: "./"
+  qc:
+    type: object
+    properties:
+      mirnas:
+        type: string
+        default: ""
+      trnas:
+        type: string
+        default: ""
+      min_cs_frip:
+        type: number
+        default: 0.9
+      min_pct_nuclear:
+        type: number
+        default: 90
+required:
+  - program
+  - chrom_sizes
