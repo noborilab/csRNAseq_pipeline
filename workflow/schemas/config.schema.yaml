@@ -166,6 +166,15 @@ properties:
               Maximum number of loci a read may map to before being
               discarded (--outFilterMultimapNmax). Multimappers are
               subsequently removed by the MAPQ filter.
+          genome_sa_index_nbases:
+            type: integer
+            default: 14
+            description: >
+              Length of the SA pre-indexing string (--genomeSAindexNbases)
+              used when building the STAR index. For small genomes, use
+              min(14, floor(log2(genome_size) / 2 - 1)): e.g. 12 for
+              Arabidopsis (~135 Mb), 11 for a ~30 Mb fungal genome. STAR
+              will emit a warning if the default 14 is too large.
       homer:
         type: object
         properties:

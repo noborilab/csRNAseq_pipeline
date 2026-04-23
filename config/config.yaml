@@ -44,6 +44,9 @@ program:
     align_ends_type: "EndToEnd"
     align_intron_max: 1
     out_filter_multimap_nmax: 1000
+    # For small genomes lower this: min(14, floor(log2(genome_size_bp) / 2 - 1))
+    # e.g. 12 for Arabidopsis (~135 Mb)
+    genome_sa_index_nbases: 14
   homer:
     genome: "tair10"
     tagdir:
