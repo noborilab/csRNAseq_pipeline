@@ -45,10 +45,13 @@ for (i in seq_along(samples)) {
     samples_i <- paste0(snakemake@params[["bed_dir"]], '/', input_i$id, '.tss.bed')
     tss_all[[i]] <- sampleTSSs(samples[i], samples_i, nreps)
 }
+cs <- read.table(snakemake@params[["chrom_sizes"]], header = FALSE)
+valid_chroms <- as.character(cs$V1)
+
 tss <- do.call(c, tss_all)
 tss <- sort(reduce(sort(tss)))
-tss <- tss[as.character(seqnames(tss)) %in% as.character(1:5), ]
-seqlevels(tss) <- as.character(1:5)
+tss <- tss[as.character(seqnames(tss)) %in% valid_chroms, ]
+seqlevels(tss, pruning.mode = "coarse") <- intersect(valid_chroms, seqlevels(tss))
 tss <- sort(tss)
 tss[width(tss) < 150] <- resize(tss[width(tss) < 150], 150, 'center')
 tssOvs <- findOverlaps(tss)

@@ -5,108 +5,208 @@ properties:
   sample_table:
     type: string
     default: "config/samples.tsv"
+    description: >
+      Path to the sample metadata TSV. Must contain columns: sample_name,
+      sample_type (csrna|input), read_r1. Optional: replicate (integer,
+      default 1), read_r2 (blank for single-end). Comma-separate multiple
+      FASTQ paths in a single cell.
   chrom_sizes:
     type: string
+    description: >
+      Path to a two-column (chrom, size) TSV without a header. Only
+      chromosomes listed here are kept in merged TSSs, consensus TSSs, and
+      bigWig tracks — omit organelle chromosomes (e.g. Mt, Pt) from this
+      file to exclude them from the analysis.
   genome_fasta:
     type: string
+    description: >
+      Path to the reference genome FASTA. Used only to build an alignment
+      index when genome_index does not yet exist. If genome_index already
+      exists, this key is optional.
   program:
     type: object
     properties:
       genome_index:
         type: string
+        description: >
+          Path to the pre-built genome index for the selected
+          alignment_program (bwa, STAR, bowtie2, or hisat2 index).
       bfqutils:
         type: object
         properties:
           sequencing_adapter:
             type: string
             default: "AGATCGGAAGAGCACACGTCTGAACTCCAGTCA"
+            description: >
+              3′ adapter sequence to trim from reads. Default is the
+              standard Illumina TruSeq adapter.
           use_pigz:
             type: boolean
             default: False
+            description: >
+              Use pigz (parallel gzip) instead of gzip for compressing
+              trimmed FASTQ. Speeds up the trim step on multi-core machines.
           pigz_threads:
             type: integer
             default: 4
+            description: >
+              Number of pigz compression threads. Only used when use_pigz
+              is true. Capped automatically to leave at least two threads
+              for bfqutils itself.
       max_read_length:
         type: integer
         default: 70
+        description: >
+          Maximum read length (bp) retained after trimming. Reads longer
+          than this are hard-clipped. 70 bp is appropriate for csRNA-seq
+          to avoid multi-mapper artefacts.
       alignment_threads:
         type: integer
         default: 1
+        description: >
+          Number of threads allocated to each alignment job. Minimum
+          effective value is 2 (samtools sort runs concurrently). Increase
+          to speed up alignment at the cost of running fewer jobs in parallel.
       alignment_program:
         enum:
           - "bwa-aln"
           - "bwa-mem"
           - "STAR"
           - "bowtie2"
+          - "hisat2"
         default: "bwa-aln"
+        description: >
+          Read aligner to use. bwa-aln is recommended and is the only
+          aligner fully tested with the pipeline. STAR, bowtie2, and
+          hisat2 support is implemented but not yet validated.
       keep_trimmed_fastq:
         type: boolean
         default: True
+        description: >
+          Retain trimmed FASTQ files after alignment. Set to false to mark
+          them as temporary so Snakemake deletes them once they are no
+          longer needed, saving disk space.
       keep_bam:
         type: boolean
         default: True
+        description: >
+          Retain sorted BAM files after HOMER tag directory creation. Set
+          to false to have Snakemake delete them automatically.
       bwa_aln:
         type: object
         properties:
           keep_sai:
             type: boolean
             default: True
+            description: >
+              Retain the intermediate .sai file produced by bwa aln. Set to
+              false to delete it automatically after alignment.
       bwa_mem:
         type: object
         properties:
           w:
             type: integer
             default: 0
+            description: >
+              Band width for Smith-Waterman alignment (-w). Set to 0 to
+              disable gapped alignment, which is appropriate for short
+              csRNA-seq reads.
           L:
             type: integer
             default: 999
+            description: >
+              Clipping penalty (-L). High value discourages soft-clipping,
+              ensuring reads align end-to-end.
           O:
             type: integer
             default: 999
+            description: >
+              Gap open penalty (-O). High value discourages gapped
+              alignments, appropriate for short csRNA-seq reads.
       bowtie2:
         type: object
         properties:
           extra_params:
             type: string
             default: "--very-sensitive"
+            description: Additional command-line flags passed to bowtie2.
+      hisat2:
+        type: object
+        properties:
+          extra_params:
+            type: string
+            default: "--very-sensitive"
+            description: Additional command-line flags passed to hisat2.
       star:
         type: object
         properties:
           read_files_command:
             type: string
             default: "zcat"
+            description: >
+              Command used by STAR to decompress input FASTQ
+              (--readFilesCommand). Use "zcat" for .gz files.
           align_ends_type:
             type: string
             default: "EndToEnd"
+            description: >
+              STAR end-to-end vs local alignment mode
+              (--alignEndsType). EndToEnd is recommended for csRNA-seq.
           align_intron_max:
             type: integer
             default: 1
+            description: >
+              Maximum intron length (--alignIntronMax). Set to 1 to
+              suppress spliced alignments, appropriate for unspliced
+              csRNA-seq reads.
           out_filter_multimap_nmax:
             type: integer
             default: 1000
+            description: >
+              Maximum number of loci a read may map to before being
+              discarded (--outFilterMultimapNmax). Multimappers are
+              subsequently removed by the MAPQ filter.
       homer:
         type: object
         properties:
           genome:
             type: string
+            description: >
+              HOMER genome name (e.g. tair10, hg38). Must match a genome
+              already configured in your HOMER installation.
           tagdir:
             type: object
             properties:
               extra_args:
                 type: string
                 default: "-checkGC"
+                description: >
+                  Extra arguments passed to makeTagDirectory. -checkGC
+                  calculates GC-content statistics useful for QC.
           tss:
             type: object
             properties:
               size:
                 type: integer
                 default: 100
+                description: >
+                  Window size (bp) around each TSS used by
+                  findcsRNATSS.pl (-size). Smaller windows give higher
+                  resolution but may miss broad initiation regions.
               ntagthreshold:
                 type: integer
                 default: 5
+                description: >
+                  Minimum number of tags (reads) required to call a TSS
+                  (-ntagThreshold). Increase to reduce noise at the cost
+                  of sensitivity.
               extra_args:
                 type: string
                 default: "-includeSingleExons"
+                description: >
+                  Extra arguments passed to findcsRNATSS.pl.
+                  -includeSingleExons retains TSSs on single-exon genes
+                  that HOMER would otherwise filter.
           required:
             - genome
     required:
@@ -118,48 +218,98 @@ properties:
       alignment_mapq:
         type: integer
         default: 30
+        description: >
+          Minimum MAPQ score for a read to be retained after alignment.
+          MAPQ 30 corresponds to a 0.1% probability of the read being
+          misplaced.
       exclude_flags:
         type: integer
         default: 2308
+        description: >
+          SAM FLAG bits to exclude (samtools view -F). Default 2308 removes
+          unmapped reads (4), secondary alignments (256), and supplementary
+          alignments (2048).
       include_flags:
         type: integer
         default: 0
+        description: >
+          SAM FLAG bits that must be set (samtools view -f). Default 0
+          means no mandatory flags. Set to 2 to require properly paired
+          reads when using paired-end data.
       min_alignment_length:
         type: integer
         default: 15
+        description: >
+          Minimum aligned read length (bp) retained after alignment. Removes
+          very short alignments that are more likely to be artefactual.
       max_mismatch:
         type: integer
         default: 999
+        description: >
+          Maximum number of mismatches (NM tag) allowed in an alignment.
+          Default 999 effectively disables this filter. Lower values impose
+          stricter mapping specificity.
       tss_min_reps:
         type: integer
         default: 1
+        description: >
+          Minimum number of replicates in which a TSS must be detected to
+          be included in the final consensus set. Set to 1 to keep all
+          TSSs regardless of reproducibility; increase for stricter
+          reproducibility filtering.
       mask_srnas_from_bw:
         type: boolean
         default: True
+        description: >
+          Remove input-library TSS regions (small RNAs) from the normalized
+          bigWig tracks. These regions can confound visual interpretation of
+          csRNA-seq signal.
   files:
     type: object
     properties:
       output_dir:
         type: string
         default: "./"
+        description: >
+          Root directory for all result files: QC tables, BED files,
+          quantification matrices, bigWigs, and HOMER tag directories.
       intermediate_dir:
         type: string
         default: "./"
+        description: >
+          Root directory for intermediate files: trimmed FASTQs, SAI files,
+          and sorted BAMs. Can be set to a scratch filesystem to reduce I/O
+          load on the main storage.
   qc:
     type: object
     properties:
       mirnas:
         type: string
         default: ""
+        description: >
+          Path to a BED file of miRNA loci. Used to calculate the miRNA
+          depletion ratio (a measure of 5′-phosphate enrichment). Leave
+          blank to skip this metric.
       trnas:
         type: string
         default: ""
+        description: >
+          Path to a BED file of pre-tRNA loci. Used to calculate the
+          phosphorylation efficiency metric. Leave blank to skip.
       min_cs_frip:
         type: number
         default: 0.9
+        description: >
+          Minimum Fraction of Reads in Peaks (FRiP) for a csRNA sample to
+          pass QC. FRiP measures what fraction of nuclear reads fall within
+          called TSSs; values below ~0.9 suggest a library quality problem.
       min_pct_nuclear:
         type: number
         default: 90
+        description: >
+          Minimum percentage of aligned reads originating from nuclear
+          chromosomes (i.e. not mitochondrial or plastid). Low values
+          indicate organellar contamination.
 required:
   - program
   - chrom_sizes

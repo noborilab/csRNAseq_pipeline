@@ -39,11 +39,12 @@ except:
 if not is_integer_dtype(chromsizes[1]):
     sys.exit("The second column of the chrom.sizes file must be integers")
 chromsizes[0] = chromsizes[0].astype(str)
+VALID_CHROMS = chromsizes[0].tolist()
 
-if workflow.cores < 2:
-    sys.exit("ERROR: This workflow requires at least --cores 2.")
+if workflow.cores < 3:
+    sys.exit("ERROR: This workflow requires minimum --cores 3.")
 
-MIN_ALN_THREADS = 2
+MIN_ALN_THREADS = max(2, config["program"]["alignment_threads"])
 MIN_TRIM_THREADS = 2
 PIGZ_THREADS = 0
 if config["program"]["bfqutils"]["use_pigz"]:
@@ -85,7 +86,7 @@ def get_matching_sample(s):
         sys.exit(
             f"ERROR: Each csrna/input sample must only have a single matching input/csrna [{s}]"
         )
-    return s_match
+    return s_match.iloc[0]
 
 
 # Check that all samples have a single matching cssrna/input before starting
@@ -144,11 +145,6 @@ rule all:
         ),
 
 
-def get_input_fastq(r1, r2):
-    r = abspath(r1) + " " + abspath(r2)
-    return r.strip()
-
-
 def get_input_r1(r):
     r = r.split(",")
     return [abspath(r_.strip()) for r_ in r]
@@ -167,7 +163,9 @@ rule trim:
             sampletab.loc[wildcards.sample, "read_r2"],
         ),
     output:
-        INTERMEDIATE_DIR + "/trim/{sample}.fq.gz",
+        temp(INTERMEDIATE_DIR + "/trim/{sample}.fq.gz")
+        if not config["program"]["keep_trimmed_fastq"]
+        else INTERMEDIATE_DIR + "/trim/{sample}.fq.gz",
     params:
         max_len=config["program"]["max_read_length"],
         adp=config["program"]["bfqutils"]["sequencing_adapter"],
@@ -222,7 +220,8 @@ def build_aln_cmd(i, o, l, t):
         cmd_aln = f"bwa aln -o 0 -t {t} {index} {i} > {sai} 2> /dev/null; "
         cmd_aln += f"bwa samse {index} {sai} {i} 2> /dev/null | "
         cmd_filt += f"-e '[NM]<={maxm}' - | samtools sort -T {o}.tmp --verbosity 0 -@ $(({t}-2)) -o {o}; "
-        cmd_post += f"; rm {sai}"
+        if not config["program"]["bwa_aln"]["keep_sai"]:
+            cmd_post += f"; rm {sai}"
     elif aln == "bwa-mem":
         bwa_w = config["program"]["bwa_mem"]["w"]
         bwa_L = config["program"]["bwa_mem"]["L"]
@@ -248,11 +247,17 @@ def build_aln_cmd(i, o, l, t):
         base = str(Path(os.path.basename(o)).with_suffix("").with_suffix(""))
         prefix = os.path.dirname(o) + "/" + base + "."
         cmd_aln += f"--outFileNamePrefix {prefix} "
-        unsrt = prefix + ".Aligned.out.bam"
+        unsrt = prefix + "Aligned.out.bam"
         cmd_filt += f"-e '[nM]<={maxm}' {unsrt} | samtools sort -T {o}.tmp --verbosity 0 -@ $(({t}-2)) -o {o}; "
     elif aln == "bowtie2":
         bt2_ext = config["program"]["bowtie2"]["extra_params"]
         cmd_aln = f"bowtie2 {bt2_ext} -p $(({t}-1)) -x {index} -U {i} | "
+        cmd_filt += (
+            f"-e '[NM]<={maxm}' - | samtools sort -T {o}.tmp --verbosity 0 -o {o}; "
+        )
+    elif aln == "hisat2":
+        ht2_ext = config["program"]["hisat2"]["extra_params"]
+        cmd_aln = f"hisat2 {ht2_ext} -p $(({t}-1)) -x {index} -U {i} | "
         cmd_filt += (
             f"-e '[NM]<={maxm}' - | samtools sort -T {o}.tmp --verbosity 0 -o {o}; "
         )
@@ -265,8 +270,12 @@ rule align:
     input:
         INTERMEDIATE_DIR + "/trim/{sample}.fq.gz",
     output:
-        bam=INTERMEDIATE_DIR + "/bam/{sample}.sort.bam",
-        bai=INTERMEDIATE_DIR + "/bam/{sample}.sort.bam.bai",
+        bam=temp(INTERMEDIATE_DIR + "/bam/{sample}.sort.bam")
+        if not config["program"]["keep_bam"]
+        else INTERMEDIATE_DIR + "/bam/{sample}.sort.bam",
+        bai=temp(INTERMEDIATE_DIR + "/bam/{sample}.sort.bam.bai")
+        if not config["program"]["keep_bam"]
+        else INTERMEDIATE_DIR + "/bam/{sample}.sort.bam.bai",
     log:
         OUTPUT_DIR + "/qc/{sample}.aln.txt",
     threads: MIN_ALN_THREADS
@@ -281,13 +290,15 @@ rule make_tagdir:
         "minimal"
     output:
         directory(OUTPUT_DIR + "/tagdir/{sample}"),
+    log:
+        OUTPUT_DIR + "/qc/{sample}.tagdir.log",
     params:
         genome=config["program"]["homer"]["genome"],
         opt=config["program"]["homer"]["tagdir"]["extra_args"],
     shell:
         """
             samtools view -h {input} > {input}.sam
-            makeTagDirectory {output} {input}.sam -genome {params.genome} {params.opt}
+            makeTagDirectory {output} {input}.sam -genome {params.genome} {params.opt} > {log} 2>&1
             rm {input}.sam
         """
 
@@ -303,6 +314,8 @@ rule find_tss_initial:
     output:
         tss=OUTPUT_DIR + "/tss/{sample}.tss.txt",
         bed=OUTPUT_DIR + "/bed/{sample}.tss.bed",
+    log:
+        OUTPUT_DIR + "/qc/{sample}.find_tss.log",
     params:
         prefix=OUTPUT_DIR + "/tss/{sample}",
         genome=config["program"]["homer"]["genome"],
@@ -313,8 +326,8 @@ rule find_tss_initial:
         """
             findcsRNATSS.pl {input.sample} -i {input.match} \
                 -o {params.prefix} -genome {params.genome} \
-                -size {params.size} -ntagThreshold {params.ntags} {params.opt}
-            pos2bed.pl -o {output.bed} {output.tss}
+                -size {params.size} -ntagThreshold {params.ntags} {params.opt} > {log} 2>&1
+            pos2bed.pl -o {output.bed} {output.tss} 2>> {log}
         """
 
 
@@ -324,13 +337,15 @@ rule make_raw_bedgraph:
     output:
         pos=OUTPUT_DIR + "/bedgraph/{sample}.raw.pos.bedGraph.gz",
         neg=OUTPUT_DIR + "/bedgraph/{sample}.raw.neg.bedGraph.gz",
+    log:
+        OUTPUT_DIR + "/qc/{sample}.bedgraph.log",
     params:
         pos=OUTPUT_DIR + "/bedgraph/{sample}.raw.pos.bedGraph",
         neg=OUTPUT_DIR + "/bedgraph/{sample}.raw.neg.bedGraph",
     shell:
         """
-            makeUCSCfile {input} -style tss -strand + -raw -o {params.pos}
-            makeUCSCfile {input} -style tss -strand - -raw -o {params.neg}
+            makeUCSCfile {input} -style tss -strand + -raw -o {params.pos} > {log} 2>&1
+            makeUCSCfile {input} -style tss -strand - -raw -o {params.neg} >> {log} 2>&1
         """
 
 
@@ -373,19 +388,24 @@ rule merge_initial_tss:
             OUTPUT_DIR + "/bed/" + s + ".tss.bed"
             for s in sampletab["id"][sampletab["sample_type"] == "input"]
         ),
+        valid_chroms=" ".join(VALID_CHROMS),
     shell:
         """
             cat {params.in_cs} \
             | bedtools sort -i stdin \
             | bedtools merge -s -c 6 -o distinct -i stdin \
             | bedtools sort -i stdin \
-            | awk 'BEGIN{{IFS="\t";OFS="\t"}}{{if ($1!="Mt" && $1!="Pt") {{print $1,$2,$3,"TSS_" NR,"0",$4}}}}' \
+            | awk -v vc="{params.valid_chroms}" \
+                'BEGIN{{IFS="\t";OFS="\t";n=split(vc,a," ");for(i=1;i<=n;i++) ok[a[i]]=1}} \
+                (ok[$1]){{print $1,$2,$3,"TSS_" NR,"0",$4}}' \
                 > {output.cs}
             cat {params.in_in} \
             | bedtools sort -i stdin \
             | bedtools merge -s -c 6 -o distinct -i stdin \
             | bedtools sort -i stdin \
-            | awk 'BEGIN{{IFS="\t";OFS="\t"}}{{if ($1!="Mt" && $1!="Pt") {{print $1,$2,$3,"TSS_" NR,"0",$4}}}}' \
+            | awk -v vc="{params.valid_chroms}" \
+                'BEGIN{{IFS="\t";OFS="\t";n=split(vc,a," ");for(i=1;i<=n;i++) ok[a[i]]=1}} \
+                (ok[$1]){{print $1,$2,$3,"TSS_" NR,"0",$4}}' \
                 > {output.inp}
         """
 
@@ -406,16 +426,18 @@ rule quantify_inital_cs_tss:
     output:
         cs=OUTPUT_DIR + "/all_cs.tss_merged_quant_cs.txt",
         inp=OUTPUT_DIR + "/all_cs.tss_merged_quant_in.txt",
+    log:
+        OUTPUT_DIR + "/qc/quantify_cs_tss.log",
     params:
         genome=config["program"]["homer"]["genome"],
     shell:
         """
             annotatePeaks.pl {input.tss} {params.genome} \
                 -strand + -fragLength 1 -raw -d {input.cs} \
-                > {output.cs}
+                > {output.cs} 2> {log}
             annotatePeaks.pl {input.tss} {params.genome} \
                 -strand + -fragLength 1 -raw -d {input.inp} \
-                > {output.inp}
+                > {output.inp} 2>> {log}
         """
 
 
@@ -435,16 +457,18 @@ rule quantify_inital_in_tss:
     output:
         cs=OUTPUT_DIR + "/all_in.tss_merged_quant_cs.txt",
         inp=OUTPUT_DIR + "/all_in.tss_merged_quant_in.txt",
+    log:
+        OUTPUT_DIR + "/qc/quantify_in_tss.log",
     params:
         genome=config["program"]["homer"]["genome"],
     shell:
         """
             annotatePeaks.pl {input.tss} {params.genome} \
                 -strand + -fragLength 1 -raw -d {input.cs} \
-                > {output.cs}
+                > {output.cs} 2> {log}
             annotatePeaks.pl {input.tss} {params.genome} \
                 -strand + -fragLength 1 -raw -d {input.inp} \
-                > {output.inp}
+                > {output.inp} 2>> {log}
         """
 
 
@@ -484,6 +508,7 @@ rule collect_consensus_tss:
         replicates=" ".join(list(sampletab["replicate"].astype(str))),
         bed_dir=OUTPUT_DIR + "/bed",
         bg_dir=OUTPUT_DIR + "/bedgraph",
+        chrom_sizes=config["chrom_sizes"],
     script:
         "scripts/collect_consensus_tss.R"
 
@@ -497,13 +522,15 @@ rule quantify_final_tss:
         ),
     output:
         OUTPUT_DIR + "/tss.homer.raw.txt",
+    log:
+        OUTPUT_DIR + "/qc/quantify_final_tss.log",
     params:
         genome=config["program"]["homer"]["genome"],
     shell:
         """
             annotatePeaks.pl {input.tss} {params.genome} \
                 -strand + -fragLength 1 -raw -d {input.td} \
-                > {output}
+                > {output} 2> {log}
         """
 
 

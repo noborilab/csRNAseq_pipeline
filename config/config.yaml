@@ -37,6 +37,8 @@ program:
     O: 999
   bowtie2:
     extra_params: "--very-sensitive"
+  hisat2:
+    extra_params: "--very-sensitive --no-spliced-alignment --no-softclip"
   star:
     read_files_command: "zcat"
     align_ends_type: "EndToEnd"

@@ -22,8 +22,8 @@ samplename <- gsub(".rpm.pos.bw$", "", samplename)
 
 bg_p <- suppressWarnings(import(snakemake@input[["bg_p"]]))
 bg_n <- suppressWarnings(import(snakemake@input[["bg_n"]]))
-bg_p <- bg_p[as.character(seqnames(bg_p)) %in% as.character(1:5), ]
-bg_n <- bg_n[as.character(seqnames(bg_n)) %in% as.character(1:5), ]
+bg_p <- bg_p[as.character(seqnames(bg_p)) %in% names(cs), ]
+bg_n <- bg_n[as.character(seqnames(bg_n)) %in% names(cs), ]
 mcols(bg_p)[['score']] <- mcols(bg_p)[['score']] * nf[samplename, 'mult.per.million']
 mcols(bg_n)[['score']] <- -abs(mcols(bg_n)[['score']]) * nf[samplename, 'mult.per.million']
 seqlevels(bg_p) <- names(cs)

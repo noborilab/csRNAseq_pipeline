@@ -20,8 +20,8 @@ stats_cs <- read.table(trimws(STATS_CS), header=TRUE, stringsAsFactors=FALSE)
 stats_in <- read.table(trimws(STATS_IN), header=TRUE, stringsAsFactors=FALSE)
 
 quant_csTSS_csRNA <- suppressMessages(readr::read_tsv(trimws(QUANT_csTSS_csRNA)))
-quant_csTSS_input <- suppressMessages(readr::read_tsv(trimws(QUANT_inTSS_csRNA)))
-quant_inTSS_csRNA <- suppressMessages(readr::read_tsv(trimws(QUANT_csTSS_input)))
+quant_csTSS_input <- suppressMessages(readr::read_tsv(trimws(QUANT_csTSS_input)))
+quant_inTSS_csRNA <- suppressMessages(readr::read_tsv(trimws(QUANT_inTSS_csRNA)))
 quant_inTSS_input <- suppressMessages(readr::read_tsv(trimws(QUANT_inTSS_input)))
 
 f_mirna <- trimws(MIRNAS)
