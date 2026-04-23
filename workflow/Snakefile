@@ -83,6 +83,21 @@ INDEX_SENTINEL = index_sentinel(
     config["program"]["alignment_program"],
     config["program"]["genome_index"],
 )
+
+# For STAR the index is a directory; if genome_index points to an existing
+# regular file the sentinel path (index/SA) is invalid and causes a crash.
+if (
+    config["program"]["alignment_program"] == "STAR"
+    and os.path.isfile(config["program"]["genome_index"])
+):
+    sys.exit(
+        f"ERROR: alignment_program is STAR but genome_index points to a file: "
+        f"{config['program']['genome_index']!r}. "
+        "For STAR, genome_index must be a directory path "
+        "(e.g. /path/to/star_index/). "
+        "Update genome_index to the directory where the STAR index is or will be built."
+    )
+
 NEED_INDEX = not os.path.exists(INDEX_SENTINEL)
 if NEED_INDEX and not config.get("genome_fasta"):
     sys.exit(
