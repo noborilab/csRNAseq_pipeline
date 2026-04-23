@@ -29,7 +29,12 @@ snakemake --cores 6 --configfile config/config.yaml
 
 # Dry-run to verify the workflow before executing
 snakemake --cores 6 --configfile config/config.yaml -n
+
+# Generate an HTML report after a completed run
+snakemake --cores 1 --configfile config/config.yaml --report report.html
 ```
+
+The report includes a workflow DAG, per-rule runtime and memory statistics from the benchmark files, and interactive sortable tables for the QC summaries, normalisation factors, normalised TSS counts, and the consensus TSS BED. All reported files are also available for download directly from the HTML page.
 
 ## Required config entries
 
