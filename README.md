@@ -97,6 +97,7 @@ All outputs land in `files / output_dir` (default: `results/`):
 | `qc/qc_in.txt` | Per-sample QC metrics for input libraries. |
 | `qc/{sample}.trimming.txt` | bfqutils trimming summary. |
 | `qc/{sample}.aln.txt` | samtools flagstat alignment summary. |
+| `qc/{sample}.aligner.log` | Aligner stderr (bwa/STAR/bowtie2/hisat2). |
 
 ## QC Metrics
 

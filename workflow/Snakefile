@@ -158,13 +158,13 @@ if _min_reps > _reps_per_cond.min():
 
 # Make sure no spaces in fastq filenames
 for i in range(sampletab.shape[0]):
-    if " " in sampletab["read_r1"][i]:
+    if " " in sampletab["read_r1"].iloc[i]:
         sys.exit(
-            f"ERROR: FastQ filenames cannot contain spaces [{sampletab["read_r1"][i]}]"
+            f"ERROR: FastQ filenames cannot contain spaces [{sampletab["read_r1"].iloc[i]}]"
         )
-    if " " in sampletab["read_r2"][i]:
+    if " " in sampletab["read_r2"].iloc[i]:
         sys.exit(
-            f"ERROR: FastQ filenames cannot contain spaces [{sampletab["read_r2"][i]}]"
+            f"ERROR: FastQ filenames cannot contain spaces [{sampletab["read_r2"].iloc[i]}]"
         )
 
 
@@ -288,7 +288,7 @@ def build_index_cmd(fasta, index, threads):
         sys.exit("ERROR: Unknown alignment program")
 
 
-def build_aln_cmd(i, o, l, t):
+def build_aln_cmd(i, o, l_flagstat, l_aln, t):
     aln = config["program"]["alignment_program"]
     excl_f = config["filtering"]["exclude_flags"]
     incl_f = config["filtering"]["include_flags"]
@@ -296,18 +296,21 @@ def build_aln_cmd(i, o, l, t):
     mapq = config["filtering"]["alignment_mapq"]
     index = config["program"]["genome_index"]
     maxm = config["filtering"]["max_mismatch"]
-    cmd_filt = f"samtools view -b -q {mapq} -e 'rlen>={minlen}' "
+    # STAR uses the lowercase nM tag (mismatches only); other aligners use NM (mismatches+indels).
+    nm_tag = "nM" if aln == "STAR" else "NM"
+    filter_expr = f"rlen>={minlen} && [{nm_tag}]<={maxm}"
+    cmd_filt = f"samtools view -b -q {mapq} -e '{filter_expr}' "
     if excl_f > 0:
         cmd_filt += f"-F {excl_f} "
     if incl_f > 0:
         cmd_filt += f"-f {incl_f} "
-    cmd_post = f"samtools index {o}; samtools flagstat {o} > {l}"
+    cmd_post = f"samtools index {o}; samtools flagstat {o} > {l_flagstat}"
     cmd_aln = ""
     if aln == "bwa-aln":
         sai = o + ".sai"
-        cmd_aln = f"bwa aln -o 0 -t {t} {index} {i} > {sai} 2> /dev/null; "
-        cmd_aln += f"bwa samse {index} {sai} {i} 2> /dev/null | "
-        cmd_filt += f"-e '[NM]<={maxm}' - | samtools sort -T {o}.tmp --verbosity 0 -@ $(({t}-2)) -o {o}; "
+        cmd_aln = f"bwa aln -o 0 -t {t} {index} {i} > {sai} 2> {l_aln}; "
+        cmd_aln += f"bwa samse {index} {sai} {i} 2>> {l_aln} | "
+        cmd_filt += f"- | samtools sort -T {o}.tmp --verbosity 0 -@ $(({t}-2)) -o {o}; "
         if not config["program"]["bwa_aln"]["keep_sai"]:
             cmd_post += f"; rm {sai}"
     elif aln == "bwa-mem":
@@ -315,13 +318,12 @@ def build_aln_cmd(i, o, l, t):
         bwa_L = config["program"]["bwa_mem"]["L"]
         bwa_O = config["program"]["bwa_mem"]["O"]
         cmd_aln = (
-            f"bwa mem -t $(({t}-1)) -w {bwa_w} -L {bwa_L} -O {bwa_O} {index} {i} | "
+            f"bwa mem -t $(({t}-1)) -w {bwa_w} -L {bwa_L} -O {bwa_O} {index} {i} 2> {l_aln} | "
         )
         cmd_filt += (
-            f"-e '[NM]<={maxm}' - | samtools sort -T {o}.tmp --verbosity 0 -o {o}; "
+            f"- | samtools sort -T {o}.tmp --verbosity 0 -o {o}; "
         )
     elif aln == "STAR":
-        minlen = config["filtering"]["min_alignment_length"]
         readcmd = config["program"]["star"]["read_files_command"]
         aet = config["program"]["star"]["align_ends_type"]
         aim = config["program"]["star"]["align_intron_max"]
@@ -334,20 +336,20 @@ def build_aln_cmd(i, o, l, t):
         cmd_aln += f"--outSAMtype BAM Unsorted "
         base = str(Path(os.path.basename(o)).with_suffix("").with_suffix(""))
         prefix = os.path.dirname(o) + "/" + base + "."
-        cmd_aln += f"--outFileNamePrefix {prefix} "
+        cmd_aln += f"--outFileNamePrefix {prefix} > {l_aln} 2>&1; "
         unsrt = prefix + "Aligned.out.bam"
-        cmd_filt += f"-e '[nM]<={maxm}' {unsrt} | samtools sort -T {o}.tmp --verbosity 0 -@ $(({t}-2)) -o {o}; "
+        cmd_filt += f"{unsrt} | samtools sort -T {o}.tmp --verbosity 0 -@ $(({t}-2)) -o {o}; "
     elif aln == "bowtie2":
         bt2_ext = config["program"]["bowtie2"]["extra_params"]
-        cmd_aln = f"bowtie2 {bt2_ext} -p $(({t}-1)) -x {index} -U {i} | "
+        cmd_aln = f"bowtie2 {bt2_ext} -p $(({t}-1)) -x {index} -U {i} 2> {l_aln} | "
         cmd_filt += (
-            f"-e '[NM]<={maxm}' - | samtools sort -T {o}.tmp --verbosity 0 -o {o}; "
+            f"- | samtools sort -T {o}.tmp --verbosity 0 -o {o}; "
         )
     elif aln == "hisat2":
         ht2_ext = config["program"]["hisat2"]["extra_params"]
-        cmd_aln = f"hisat2 {ht2_ext} -p $(({t}-1)) -x {index} -U {i} | "
+        cmd_aln = f"hisat2 {ht2_ext} -p $(({t}-1)) -x {index} -U {i} 2> {l_aln} | "
         cmd_filt += (
-            f"-e '[NM]<={maxm}' - | samtools sort -T {o}.tmp --verbosity 0 -o {o}; "
+            f"- | samtools sort -T {o}.tmp --verbosity 0 -o {o}; "
         )
     else:
         sys.exit("ERROR: Unknown alignment program")
@@ -372,6 +374,7 @@ if NEED_INDEX:
             mem_mb=16000,
         shell:
             build_index_cmd("{input}", config["program"]["genome_index"], "{threads}")
+            + " > {log} 2>&1"
 
 
 rule align:
@@ -388,14 +391,17 @@ rule align:
         if not config["program"]["keep_bam"]
         else INTERMEDIATE_DIR + "/bam/{sample}.sort.bam.bai",
     log:
-        OUTPUT_DIR + "/qc/{sample}.aln.txt",
+        flagstat=OUTPUT_DIR + "/qc/{sample}.aln.txt",
+        aligner=OUTPUT_DIR + "/qc/{sample}.aligner.log",
     benchmark:
         OUTPUT_DIR + "/qc/{sample}.align.benchmark.txt",
     threads: MIN_ALN_THREADS
     resources:
         mem_mb=8000,
     shell:
-        build_aln_cmd("{input.fq}", "{output.bam}", "{log}", "{threads}")
+        build_aln_cmd(
+            "{input.fq}", "{output.bam}", "{log.flagstat}", "{log.aligner}", "{threads}"
+        )
 
 
 rule make_tagdir:
@@ -556,7 +562,7 @@ rule merge_initial_tss:
         """
 
 
-rule quantify_inital_cs_tss:
+rule quantify_initial_cs_tss:
     message:
         "Quantifying csRNA-merged TSSs"
     input:
@@ -593,7 +599,7 @@ rule quantify_inital_cs_tss:
         """
 
 
-rule quantify_inital_in_tss:
+rule quantify_initial_in_tss:
     message:
         "Quantifying input-merged TSSs"
     input:
