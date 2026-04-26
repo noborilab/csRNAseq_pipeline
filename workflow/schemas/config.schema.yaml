@@ -333,3 +333,4 @@ properties:
 required:
   - program
   - chrom_sizes
+  - qc

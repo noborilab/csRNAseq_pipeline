@@ -1,12 +1,15 @@
 suppressMessages(suppressPackageStartupMessages(library(rtracklayer)))
 
+# Use pre-cleaned IDs passed from Snakefile directly to avoid ID reconstruction mismatch
+all_ids    <- strsplit(snakemake@params[["ids"]],          " ", fixed = TRUE)[[1]]
+all_names  <- strsplit(snakemake@params[["sample_names"]], " ", fixed = TRUE)[[1]]
+all_types  <- strsplit(snakemake@params[["sample_types"]], " ", fixed = TRUE)[[1]]
+all_reps   <- strsplit(snakemake@params[["replicates"]],   " ", fixed = TRUE)[[1]]
+
 input <- data.frame(row.names = NULL,
-  id = NA,
-  sample_name = strsplit(snakemake@params[["sample_names"]], " ", fixed = TRUE)[[1]],
-  sample_type = strsplit(snakemake@params[["sample_types"]], " ", fixed = TRUE)[[1]],
-  replicate = strsplit(snakemake@params[["replicates"]], " ", fixed = TRUE)[[1]]
+  id = all_ids, sample_name = all_names,
+  sample_type = all_types, replicate = all_reps
 )
-input$id <- paste0(input$sample_name, "_", input$sample_type, input$replicate)
 input <- input[input$sample_type == "csrna", ]
 
 nreps <- snakemake@config[["filtering"]][["tss_min_reps"]]
@@ -54,26 +57,33 @@ tss <- tss[as.character(seqnames(tss)) %in% valid_chroms, ]
 seqlevels(tss, pruning.mode = "coarse") <- intersect(valid_chroms, seqlevels(tss))
 tss <- sort(tss)
 tss[width(tss) < 150] <- resize(tss[width(tss) < 150], 150, 'center')
-tssOvs <- findOverlaps(tss)
-tssOvs <- tssOvs[queryHits(tssOvs) != subjectHits(tssOvs)]
-if (length(tssOvs)) {
-  tssOvs <- tssOvs[seq(1, length(tssOvs), by = 2)]
-  if (length(tssOvs)) {
-    cat('Adjusting overlapping TSSs ...\n')
-    fix_ov_tss <- function(x) {
-      wOv <- end(x[1]) - start(x[2])
-      mvR <- wOv %/% 2
-      mvL <- -(mvR + wOv %% 2)
-      x[1] <- shift(x[1], mvL)
-      x[2] <- shift(x[2], mvR + 1)
-      x
-    }
-    for (i in seq_len(length(tssOvs))) {
-      tss[c(queryHits(tssOvs)[i], subjectHits(tssOvs)[i])] <-
-        fix_ov_tss(tss[c(queryHits(tssOvs)[i], subjectHits(tssOvs)[i])])
-    }
-  }
+
+fix_ov_tss <- function(x) {
+  wOv <- end(x[1]) - start(x[2])
+  mvR <- wOv %/% 2
+  mvL <- -(mvR + wOv %% 2)
+  x[1] <- shift(x[1], mvL)
+  x[2] <- shift(x[2], mvR + 1)
+  x
 }
+max_iter <- 100
+iter <- 0
+while (iter < max_iter) {
+  tssOvs <- findOverlaps(tss, ignore.strand = FALSE)
+  tssOvs <- tssOvs[queryHits(tssOvs) != subjectHits(tssOvs)]
+  if (!length(tssOvs)) break
+  tssOvs <- tssOvs[seq(1, length(tssOvs), by = 2)]
+  cat('Adjusting ', length(tssOvs), ' overlapping TSS pair(s) (iteration ', iter + 1, ') ...\n', sep = '')
+  for (i in seq_len(length(tssOvs))) {
+    tss[c(queryHits(tssOvs)[i], subjectHits(tssOvs)[i])] <-
+      fix_ov_tss(tss[c(queryHits(tssOvs)[i], subjectHits(tssOvs)[i])])
+  }
+  iter <- iter + 1
+}
+if (iter == max_iter) {
+  stop("ERROR: TSS overlap resolution did not converge after ", max_iter, " iterations")
+}
+
 mirnas <- snakemake@params[["mirnas"]]
 if (nzchar(mirnas)) {
     mi <- import(mirnas)
@@ -88,6 +98,6 @@ if (nzchar(trnas)) {
     tss <- subsetByOverlaps(tss, tr, ignore.strand = TRUE, invert = TRUE)
     cat('Removed ', n_before - length(tss), ' pre-tRNA-overlapping TSSs\n', sep = '')
 }
-mcols(tss)[['name']] <- paste0('TSS_', 1:length(tss));
+mcols(tss)[['name']] <- paste0('TSS_', seq_along(tss))
 cat('Final TSS count: ', length(tss), '\n', sep = '')
 export.bed(tss, snakemake@output[[1]])

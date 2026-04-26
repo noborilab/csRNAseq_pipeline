@@ -8,6 +8,7 @@ from snakemake.utils import min_version
 
 min_version("9.13.3")
 
+shell.prefix("set -euo pipefail; ")
 
 configfile: "config/config.yaml"
 
@@ -16,6 +17,13 @@ validate(config, "schemas/config.schema.yaml")
 
 sampletab = pd.read_csv(config["sample_table"], sep="\t")
 validate(sampletab, "schemas/samples.schema.yaml")
+# Ensure optional columns exist with defaults (schema defaults may not propagate to DataFrame)
+if "replicate" not in sampletab.columns:
+    sampletab["replicate"] = 1
+if "read_r2" not in sampletab.columns:
+    sampletab["read_r2"] = ""
+sampletab["replicate"] = sampletab["replicate"].fillna(1).astype(int)
+sampletab["read_r2"] = sampletab["read_r2"].fillna("").astype(str)
 sampletab["sample_name"] = sampletab["sample_name"].str.strip()
 sampletab["id"] = list(
     sampletab["sample_name"]
@@ -23,7 +31,14 @@ sampletab["id"] = list(
     + sampletab["sample_type"]
     + sampletab["replicate"].astype(str)
 )
-sampletab["id"] = sampletab["id"].str.replace(r"[^\w\s]", "", regex=True)
+# Strip all non-word chars (including whitespace) so IDs are safe as filenames
+sampletab["id"] = sampletab["id"].str.replace(r"[^\w]", "", regex=True)
+if sampletab["id"].duplicated().any():
+    dups = sampletab.loc[sampletab["id"].duplicated(keep=False), "id"].tolist()
+    sys.exit(
+        f"ERROR: duplicate sample IDs (from sample_name+sample_type+replicate): {dups}\n"
+        "Check for duplicate (sample_name, sample_type, replicate) rows in your sample table."
+    )
 sampletab = sampletab.set_index("id", drop=False)
 sampletab["read_r1"] = sampletab["read_r1"].str.strip()
 sampletab["read_r2"] = sampletab["read_r2"].str.strip()
@@ -212,7 +227,7 @@ def get_input_r1(r):
 
 
 def get_input_r2(r):
-    return get_input_r1(r) if r else []
+    return get_input_r1(r) if r and not pd.isna(r) else []
 
 
 rule trim:
@@ -339,6 +354,9 @@ def build_aln_cmd(i, o, l_flagstat, l_aln, t):
         cmd_aln += f"--outFileNamePrefix {prefix} > {l_aln} 2>&1; "
         unsrt = prefix + "Aligned.out.bam"
         cmd_filt += f"{unsrt} | samtools sort -T {o}.tmp --verbosity 0 -@ $(({t}-2)) -o {o}; "
+        cmd_post += (
+            f"; rm -f {unsrt} {prefix}Log.out {prefix}Log.final.out {prefix}SJ.out.tab"
+        )
     elif aln == "bowtie2":
         bt2_ext = config["program"]["bowtie2"]["extra_params"]
         cmd_aln = f"bowtie2 {bt2_ext} -p $(({t}-1)) -x {index} -U {i} 2> {l_aln} | "
@@ -424,9 +442,8 @@ rule make_tagdir:
         opt=config["program"]["homer"]["tagdir"]["extra_args"],
     shell:
         """
-            samtools view -h {input} > {input}.sam
-            makeTagDirectory {output} {input}.sam -genome {params.genome} {params.opt} > {log} 2>&1
-            rm {input}.sam
+            samtools view -h {input} > input.sam
+            makeTagDirectory {output} input.sam -genome {params.genome} {params.opt} > {log} 2>&1
         """
 
 
@@ -512,7 +529,7 @@ rule gather_stats:
         cs_names=" ".join(list(sampletab["id"][sampletab["sample_type"] == "csrna"])),
         in_names=" ".join(list(sampletab["id"][sampletab["sample_type"] == "input"])),
         prefix=OUTPUT_DIR + "/tagdir",
-        organelle_chroms=" ".join(config["qc"].get("organelle_chroms", ["Pt", "Mt"])),
+        organelle_chroms=" ".join(config.get("qc", {}).get("organelle_chroms", ["Pt", "Mt"])),
     shell:
         """
             OUT_PREFIX={params.prefix} OUT={output.cs} ORGANELLE_CHROMS="{params.organelle_chroms}" bash workflow/scripts/gather_stats.sh {params.cs_names}
@@ -657,8 +674,8 @@ rule qc_initial_tss:
     resources:
         mem_mb=2000,
     params:
-        mirnas=config["qc"]["mirnas"],
-        trnas=config["qc"]["trnas"],
+        mirnas=config.get("qc", {}).get("mirnas") or "",
+        trnas=config.get("qc", {}).get("trnas") or "",
     script:
         "scripts/qc_initial_tss.R"
 
@@ -680,14 +697,15 @@ rule collect_consensus_tss:
         mem_mb=2000,
     params:
         min_reps=config["filtering"]["tss_min_reps"],
+        ids=" ".join(list(sampletab["id"])),
         sample_names=" ".join(list(sampletab["sample_name"])),
         sample_types=" ".join(list(sampletab["sample_type"])),
         replicates=" ".join(list(sampletab["replicate"].astype(str))),
         bed_dir=OUTPUT_DIR + "/bed",
         bg_dir=OUTPUT_DIR + "/bedgraph",
         chrom_sizes=config["chrom_sizes"],
-        mirnas=config["qc"]["mirnas"],
-        trnas=config["qc"]["trnas"],
+        mirnas=config.get("qc", {}).get("mirnas") or "",
+        trnas=config.get("qc", {}).get("trnas") or "",
     script:
         "scripts/collect_consensus_tss.R"
 

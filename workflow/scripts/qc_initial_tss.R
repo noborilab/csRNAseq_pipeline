@@ -19,6 +19,18 @@ tss_in <- import(trimws(TSS_IN))
 stats_cs <- read.table(trimws(STATS_CS), header=TRUE, stringsAsFactors=FALSE)
 stats_in <- read.table(trimws(STATS_IN), header=TRUE, stringsAsFactors=FALSE)
 
+# Match stats_in rows to stats_cs by (sample_name, replicate) encoded in the Sample ID.
+# IDs have the form {clean_name}_csrna{rep} / {clean_name}_input{rep}; derive the join key
+# by stripping the type+replicate suffix.
+stats_cs[['key']] <- gsub("_csrna[0-9]+$", "", stats_cs[['Sample']])
+stats_in[['key']] <- gsub("_input[0-9]+$", "", stats_in[['Sample']])
+m <- match(stats_cs[['key']], stats_in[['key']])
+if (anyNA(m)) {
+  stop("ERROR: could not match all csRNA samples to input samples by name+replicate: ",
+       paste(stats_cs[['Sample']][is.na(m)], collapse = ", "))
+}
+stats_in_cs <- stats_in[m, ]
+
 quant_csTSS_csRNA <- suppressMessages(readr::read_tsv(trimws(QUANT_csTSS_csRNA)))
 quant_csTSS_input <- suppressMessages(readr::read_tsv(trimws(QUANT_csTSS_input)))
 quant_inTSS_csRNA <- suppressMessages(readr::read_tsv(trimws(QUANT_inTSS_csRNA)))
@@ -34,17 +46,24 @@ stats_cs[['NuclearReads']] <- with(stats_cs, TotalReads - OrganelleReads)
 stats_in[['NuclearReads']] <- with(stats_in, TotalReads - OrganelleReads)
 stats_cs[['PctNuclear']] <- 100 * (stats_cs[['NuclearReads']] / stats_cs[['TotalReads']])
 stats_in[['PctNuclear']] <- 100 * (stats_in[['NuclearReads']] / stats_in[['TotalReads']])
+stats_in_cs[['NuclearReads']] <- with(stats_in_cs, TotalReads - OrganelleReads)
 
-quant_csTSS_csRNA_m <- quant_csTSS_csRNA[, 20:ncol(quant_csTSS_csRNA)]
+# Detect tag-count columns by HOMER's column name pattern rather than hard-coded index
+tag_cols_csTSS_csRNA <- grep(" Tag Count", colnames(quant_csTSS_csRNA))
+tag_cols_csTSS_input <- grep(" Tag Count", colnames(quant_csTSS_input))
+tag_cols_inTSS_csRNA <- grep(" Tag Count", colnames(quant_inTSS_csRNA))
+tag_cols_inTSS_input <- grep(" Tag Count", colnames(quant_inTSS_input))
+
+quant_csTSS_csRNA_m <- quant_csTSS_csRNA[, tag_cols_csTSS_csRNA]
 colnames(quant_csTSS_csRNA_m) <- basename(gsub(' Tag Count .+', '', colnames(quant_csTSS_csRNA_m)))
 
-quant_csTSS_input_m <- quant_csTSS_input[, 20:ncol(quant_csTSS_input)]
+quant_csTSS_input_m <- quant_csTSS_input[, tag_cols_csTSS_input]
 colnames(quant_csTSS_input_m) <- basename(gsub(' Tag Count .+', '', colnames(quant_csTSS_input_m)))
 
-quant_inTSS_csRNA_m <- quant_inTSS_csRNA[, 20:ncol(quant_inTSS_csRNA)]
+quant_inTSS_csRNA_m <- quant_inTSS_csRNA[, tag_cols_inTSS_csRNA]
 colnames(quant_inTSS_csRNA_m) <- basename(gsub(' Tag Count .+', '', colnames(quant_inTSS_csRNA_m)))
 
-quant_inTSS_input_m <- quant_inTSS_input[, 20:ncol(quant_inTSS_input)]
+quant_inTSS_input_m <- quant_inTSS_input[, tag_cols_inTSS_input]
 colnames(quant_inTSS_input_m) <- basename(gsub(' Tag Count .+', '', colnames(quant_inTSS_input_m)))
 
 stats_cs[['csRiP']] <- colSums(quant_csTSS_csRNA_m)[stats_cs[['Sample']]]
@@ -52,31 +71,38 @@ stats_cs[['sRiP']] <- colSums(quant_inTSS_csRNA_m)[stats_cs[['Sample']]]
 
 stats_in[['csRiP']] <- colSums(quant_csTSS_input_m)[stats_in[['Sample']]]
 stats_in[['sRiP']] <- colSums(quant_inTSS_input_m)[stats_in[['Sample']]]
+stats_in_cs[['csRiP']] <- colSums(quant_csTSS_input_m)[stats_in_cs[['Sample']]]
+stats_in_cs[['sRiP']] <- colSums(quant_inTSS_input_m)[stats_in_cs[['Sample']]]
 
 stats_cs[['csFRiP']] <- stats_cs[['csRiP']] / stats_cs[['NuclearReads']]
 stats_cs[['sFRiP']] <- stats_cs[['sRiP']] / stats_cs[['NuclearReads']]
 stats_in[['csFRiP']] <- stats_in[['csRiP']] / stats_in[['NuclearReads']]
 stats_in[['sFRiP']] <- stats_in[['sRiP']] / stats_in[['NuclearReads']]
+stats_in_cs[['csFRiP']] <- stats_in_cs[['csRiP']] / stats_in_cs[['NuclearReads']]
+stats_in_cs[['sFRiP']] <- stats_in_cs[['sRiP']] / stats_in_cs[['NuclearReads']]
 
 stats_cs[['csRNACappedPct']] <- 100 * stats_cs[['csFRiP']]
-stats_cs[['InputCappedPct']] <- 100 * stats_in[['csFRiP']]
-stats_cs[['csEnrichment']] <- stats_cs[['csFRiP']] / stats_in[['csFRiP']]
-stats_cs[['sDepletion']] <- 1 / (stats_cs[['sFRiP']] / stats_in[['sFRiP']])
+stats_cs[['InputCappedPct']] <- 100 * stats_in_cs[['csFRiP']]
+stats_cs[['csEnrichment']] <- stats_cs[['csFRiP']] / stats_in_cs[['csFRiP']]
+stats_cs[['sDepletion']] <- 1 / (stats_cs[['sFRiP']] / stats_in_cs[['sFRiP']])
 
 if (!is.null(trna)) {
     in_pretrna <- mcols(tss_in)[['name']][overlapsAny(tss_in, trna)]
     stats_cs[['PretRNA']] <- colSums(quant_inTSS_csRNA_m[quant_inTSS_csRNA[[1]] %in% in_pretrna, ])[stats_cs[['Sample']]]
     stats_in[['PretRNA']] <- colSums(quant_inTSS_input_m[quant_inTSS_input[[1]] %in% in_pretrna, ])[stats_in[['Sample']]]
+    stats_in_cs_pretrna <- colSums(quant_inTSS_input_m[quant_inTSS_input[[1]] %in% in_pretrna, ])[stats_in_cs[['Sample']]]
     stats_cs[['PretRNAPct']] <- with(stats_cs, 100 * (PretRNA / (PretRNA + csRiP)))
     stats_in[['PretRNAPct']] <- with(stats_in, 100 * (PretRNA / (PretRNA + csRiP)))
-    stats_cs[['PhosEfficiency']] <- 1 / (stats_cs[['PretRNAPct']] / stats_in[['PretRNAPct']])
+    stats_in_cs_pretrnaPct <- 100 * (stats_in_cs_pretrna / (stats_in_cs_pretrna + stats_in_cs[['csRiP']]))
+    stats_cs[['PhosEfficiency']] <- 1 / (stats_cs[['PretRNAPct']] / stats_in_cs_pretrnaPct)
 }
 
 if (!is.null(mirna)) {
     in_mirna <- mcols(tss_in)[['name']][overlapsAny(tss_in, mirna)]
     stats_cs[['miRNA']] <- colSums(quant_inTSS_csRNA_m[quant_inTSS_csRNA[[1]] %in% in_mirna, ])[stats_cs[['Sample']]]
     stats_in[['miRNA']] <- colSums(quant_inTSS_input_m[quant_inTSS_input[[1]] %in% in_mirna, ])[stats_in[['Sample']]]
-    stats_cs[['miRNADepletion']] <- 1 / ((stats_cs[['miRNA']] / stats_cs[['NuclearReads']]) / (stats_in[['miRNA']] / stats_in[['NuclearReads']]))
+    stats_in_cs_miRNA <- colSums(quant_inTSS_input_m[quant_inTSS_input[[1]] %in% in_mirna, ])[stats_in_cs[['Sample']]]
+    stats_cs[['miRNADepletion']] <- 1 / ((stats_cs[['miRNA']] / stats_cs[['NuclearReads']]) / (stats_in_cs_miRNA / stats_in_cs[['NuclearReads']]))
 }
 
 stats_cs[['Status']] <- ifelse(stats_cs[['csFRiP']] > snakemake@config[["qc"]][["min_cs_frip"]] & stats_cs[['PctNuclear']] > snakemake@config[["qc"]][["min_pct_nuclear"]], 'Ok', 'FAIL')
@@ -85,4 +111,4 @@ readr::write_tsv(stats_cs, OUT_CS)
 readr::write_tsv(stats_in, OUT_IN)
 
 cat('Printing summary stats:\n')
-print(cbind(stats_cs[, c('Sample', 'Status', 'PctNuclear', 'csFRiP')], csFRiP_in = stats_in[['csFRiP']]))
+print(cbind(stats_cs[, c('Sample', 'Status', 'PctNuclear', 'csFRiP')], csFRiP_in = stats_in_cs[['csFRiP']]))

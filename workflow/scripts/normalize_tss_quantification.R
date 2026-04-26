@@ -4,7 +4,8 @@ suppressMessages(suppressPackageStartupMessages(library(rtracklayer)))
 tss <- import(snakemake@input[["bed"]])
 
 quant <- as.data.frame(suppressMessages(readr::read_tsv(trimws(snakemake@input[["quant"]]))))
-quant_m <- as.matrix(quant[, 20:ncol(quant)])
+tag_cols <- grep(" Tag Count", colnames(quant))
+quant_m <- as.matrix(quant[, tag_cols])
 colnames(quant_m) <- basename(gsub(' Tag Count .+', '', colnames(quant_m)))
 rownames(quant_m) <- quant[[1]]
 readr::write_tsv(as.data.frame(cbind(TSS = rownames(quant_m), quant_m)),
