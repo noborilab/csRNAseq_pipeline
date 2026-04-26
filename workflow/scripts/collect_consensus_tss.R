@@ -74,6 +74,20 @@ if (length(tssOvs)) {
     }
   }
 }
+mirnas <- snakemake@params[["mirnas"]]
+if (nzchar(mirnas)) {
+    mi <- import(mirnas)
+    n_before <- length(tss)
+    tss <- subsetByOverlaps(tss, mi, ignore.strand = TRUE, invert = TRUE)
+    cat('Removed ', n_before - length(tss), ' miRNA-overlapping TSSs\n', sep = '')
+}
+trnas <- snakemake@params[["trnas"]]
+if (nzchar(trnas)) {
+    tr <- import(trnas)
+    n_before <- length(tss)
+    tss <- subsetByOverlaps(tss, tr, ignore.strand = TRUE, invert = TRUE)
+    cat('Removed ', n_before - length(tss), ' pre-tRNA-overlapping TSSs\n', sep = '')
+}
 mcols(tss)[['name']] <- paste0('TSS_', 1:length(tss));
 cat('Final TSS count: ', length(tss), '\n', sep = '')
 export.bed(tss, snakemake@output[[1]])

@@ -53,13 +53,6 @@ properties:
               Number of pigz compression threads. Only used when use_pigz
               is true. Capped automatically to leave at least two threads
               for bfqutils itself.
-      max_read_length:
-        type: integer
-        default: 70
-        description: >
-          Maximum read length (bp) retained after trimming. Reads longer
-          than this are hard-clipped. 70 bp is appropriate for csRNA-seq
-          to avoid multi-mapper artefacts.
       alignment_threads:
         type: integer
         default: 1
@@ -245,6 +238,13 @@ properties:
           SAM FLAG bits that must be set (samtools view -f). Default 0
           means no mandatory flags. Set to 2 to require properly paired
           reads when using paired-end data.
+      max_read_length:
+        type: integer
+        default: 70
+        description: >
+          Maximum read length (bp) retained after trimming. Reads longer
+          than this are hard-clipped. 70 bp is appropriate for csRNA-seq
+          to avoid multi-mapper artefacts.
       min_alignment_length:
         type: integer
         default: 15

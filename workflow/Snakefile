@@ -137,6 +137,25 @@ for cs in sampletab.loc[sampletab["sample_type"] == "csrna", "id"]:
 for inp in sampletab.loc[sampletab["sample_type"] == "input", "id"]:
     get_matching_sample(inp)
 
+# Validate tss_min_reps: a value above the maximum replicate count would yield
+# an empty consensus set; a value above the minimum silently drops conditions.
+_min_reps = config["filtering"]["tss_min_reps"]
+_reps_per_cond = (
+    sampletab[sampletab["sample_type"] == "csrna"].groupby("sample_name").size()
+)
+if _min_reps > _reps_per_cond.max():
+    sys.exit(
+        f"ERROR: tss_min_reps={_min_reps} exceeds the maximum csRNA replicate "
+        f"count ({_reps_per_cond.max()}) — the consensus TSS set would be empty."
+    )
+if _min_reps > _reps_per_cond.min():
+    _short = _reps_per_cond[_reps_per_cond < _min_reps].index.tolist()
+    sys.stderr.write(
+        f"WARNING: tss_min_reps={_min_reps} but the following sample_name "
+        f"groups have fewer csRNA replicates: {_short}. They will not "
+        "contribute to the consensus TSS set.\n"
+    )
+
 # Make sure no spaces in fastq filenames
 for i in range(sampletab.shape[0]):
     if " " in sampletab["read_r1"][i]:
@@ -197,6 +216,8 @@ def get_input_r2(r):
 
 
 rule trim:
+    message:
+        "Trimming {wildcards.sample}"
     input:
         r1=lambda wildcards: get_input_r1(
             sampletab.loc[wildcards.sample, "read_r1"],
@@ -210,8 +231,10 @@ rule trim:
         else INTERMEDIATE_DIR + "/trim/{sample}.fq.gz",
     benchmark:
         OUTPUT_DIR + "/qc/{sample}.trim.benchmark.txt",
+    resources:
+        mem_mb=1000,
     params:
-        max_len=config["program"]["max_read_length"],
+        max_len=config["filtering"]["max_read_length"],
         adp=config["program"]["bfqutils"]["sequencing_adapter"],
         zip_cmd=(
             f"pigz -p {PIGZ_THREADS}"
@@ -334,6 +357,8 @@ def build_aln_cmd(i, o, l, t):
 if NEED_INDEX:
 
     rule build_index:
+        message:
+            "Building {} index".format(config["program"]["alignment_program"])
         input:
             config["genome_fasta"],
         output:
@@ -343,11 +368,15 @@ if NEED_INDEX:
         benchmark:
             OUTPUT_DIR + "/qc/build_index.benchmark.txt",
         threads: MIN_ALN_THREADS
+        resources:
+            mem_mb=16000,
         shell:
             build_index_cmd("{input}", config["program"]["genome_index"], "{threads}")
 
 
 rule align:
+    message:
+        "Aligning {wildcards.sample}"
     input:
         fq=INTERMEDIATE_DIR + "/trim/{sample}.fq.gz",
         idx=INDEX_SENTINEL if NEED_INDEX else [],
@@ -363,11 +392,15 @@ rule align:
     benchmark:
         OUTPUT_DIR + "/qc/{sample}.align.benchmark.txt",
     threads: MIN_ALN_THREADS
+    resources:
+        mem_mb=8000,
     shell:
         build_aln_cmd("{input.fq}", "{output.bam}", "{log}", "{threads}")
 
 
 rule make_tagdir:
+    message:
+        "Building HOMER tag directory for {wildcards.sample}"
     input:
         INTERMEDIATE_DIR + "/bam/{sample}.sort.bam",
     shadow:
@@ -378,6 +411,8 @@ rule make_tagdir:
         OUTPUT_DIR + "/qc/{sample}.tagdir.log",
     benchmark:
         OUTPUT_DIR + "/qc/{sample}.tagdir.benchmark.txt",
+    resources:
+        mem_mb=4000,
     params:
         genome=config["program"]["homer"]["genome"],
         opt=config["program"]["homer"]["tagdir"]["extra_args"],
@@ -390,6 +425,8 @@ rule make_tagdir:
 
 
 rule find_tss_initial:
+    message:
+        "Calling TSSs for {wildcards.sample}"
     input:
         sample=OUTPUT_DIR + "/tagdir/{sample}",
         match=lambda wildcards: OUTPUT_DIR
@@ -404,6 +441,9 @@ rule find_tss_initial:
         OUTPUT_DIR + "/qc/{sample}.find_tss.log",
     benchmark:
         OUTPUT_DIR + "/qc/{sample}.find_tss.benchmark.txt",
+    threads: 3
+    resources:
+        mem_mb=8000,
     params:
         prefix=OUTPUT_DIR + "/tss/{sample}",
         genome=config["program"]["homer"]["genome"],
@@ -420,6 +460,8 @@ rule find_tss_initial:
 
 
 rule make_raw_bedgraph:
+    message:
+        "Generating raw bedGraphs for {wildcards.sample}"
     input:
         OUTPUT_DIR + "/tagdir/{sample}",
     output:
@@ -429,6 +471,8 @@ rule make_raw_bedgraph:
         OUTPUT_DIR + "/qc/{sample}.bedgraph.log",
     benchmark:
         OUTPUT_DIR + "/qc/{sample}.bedgraph.benchmark.txt",
+    resources:
+        mem_mb=2000,
     params:
         pos=OUTPUT_DIR + "/bedgraph/{sample}.raw.pos.bedGraph",
         neg=OUTPUT_DIR + "/bedgraph/{sample}.raw.neg.bedGraph",
@@ -440,6 +484,8 @@ rule make_raw_bedgraph:
 
 
 rule gather_stats:
+    message:
+        "Gathering tag and alignment stats"
     input:
         cs=list(
             (OUTPUT_DIR + "/tagdir/") + s
@@ -454,6 +500,8 @@ rule gather_stats:
         inp=OUTPUT_DIR + "/qc/stats_in.txt",
     benchmark:
         OUTPUT_DIR + "/qc/gather_stats.benchmark.txt",
+    resources:
+        mem_mb=500,
     params:
         cs_names=" ".join(list(sampletab["id"][sampletab["sample_type"] == "csrna"])),
         in_names=" ".join(list(sampletab["id"][sampletab["sample_type"] == "input"])),
@@ -466,13 +514,17 @@ rule gather_stats:
 
 
 rule merge_initial_tss:
+    message:
+        "Merging per-sample TSSs"
     input:
         (OUTPUT_DIR + "/bed/" + s + ".tss.bed" for s in sampletab["id"]),
     output:
-        cs=OUTPUT_DIR + "/all_cs.tss_merged.bed",
-        inp=OUTPUT_DIR + "/all_in.tss_merged.bed",
+        cs=INTERMEDIATE_DIR + "/tss_merged/all_cs.tss_merged.bed",
+        inp=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged.bed",
     benchmark:
         OUTPUT_DIR + "/qc/merge_initial_tss.benchmark.txt",
+    resources:
+        mem_mb=2000,
     params:
         in_cs=" ".join(
             OUTPUT_DIR + "/bed/" + s + ".tss.bed"
@@ -505,8 +557,10 @@ rule merge_initial_tss:
 
 
 rule quantify_inital_cs_tss:
+    message:
+        "Quantifying csRNA-merged TSSs"
     input:
-        tss=OUTPUT_DIR + "/all_cs.tss_merged.bed",
+        tss=INTERMEDIATE_DIR + "/tss_merged/all_cs.tss_merged.bed",
         cs=list(
             (OUTPUT_DIR + "/tagdir/") + s
             for s in sampletab["id"][sampletab["sample_type"] == "csrna"]
@@ -518,12 +572,14 @@ rule quantify_inital_cs_tss:
     shadow:
         "minimal"
     output:
-        cs=OUTPUT_DIR + "/all_cs.tss_merged_quant_cs.txt",
-        inp=OUTPUT_DIR + "/all_cs.tss_merged_quant_in.txt",
+        cs=INTERMEDIATE_DIR + "/tss_merged/all_cs.tss_merged_quant_cs.txt",
+        inp=INTERMEDIATE_DIR + "/tss_merged/all_cs.tss_merged_quant_in.txt",
     log:
         OUTPUT_DIR + "/qc/quantify_cs_tss.log",
     benchmark:
         OUTPUT_DIR + "/qc/quantify_cs_tss.benchmark.txt",
+    resources:
+        mem_mb=4000,
     params:
         genome=config["program"]["homer"]["genome"],
     shell:
@@ -538,8 +594,10 @@ rule quantify_inital_cs_tss:
 
 
 rule quantify_inital_in_tss:
+    message:
+        "Quantifying input-merged TSSs"
     input:
-        tss=OUTPUT_DIR + "/all_in.tss_merged.bed",
+        tss=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged.bed",
         cs=list(
             (OUTPUT_DIR + "/tagdir/") + s
             for s in sampletab["id"][sampletab["sample_type"] == "csrna"]
@@ -551,12 +609,14 @@ rule quantify_inital_in_tss:
     shadow:
         "minimal"
     output:
-        cs=OUTPUT_DIR + "/all_in.tss_merged_quant_cs.txt",
-        inp=OUTPUT_DIR + "/all_in.tss_merged_quant_in.txt",
+        cs=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged_quant_cs.txt",
+        inp=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged_quant_in.txt",
     log:
         OUTPUT_DIR + "/qc/quantify_in_tss.log",
     benchmark:
         OUTPUT_DIR + "/qc/quantify_in_tss.benchmark.txt",
+    resources:
+        mem_mb=4000,
     params:
         genome=config["program"]["homer"]["genome"],
     shell:
@@ -571,20 +631,24 @@ rule quantify_inital_in_tss:
 
 
 rule qc_initial_tss:
+    message:
+        "Computing QC metrics"
     benchmark:
         OUTPUT_DIR + "/qc/qc_initial_tss.benchmark.txt",
     input:
-        quant_cs_cs=OUTPUT_DIR + "/all_cs.tss_merged_quant_cs.txt",
-        quant_cs_in=OUTPUT_DIR + "/all_cs.tss_merged_quant_in.txt",
-        quant_in_cs=OUTPUT_DIR + "/all_in.tss_merged_quant_cs.txt",
-        quant_in_in=OUTPUT_DIR + "/all_in.tss_merged_quant_in.txt",
+        quant_cs_cs=INTERMEDIATE_DIR + "/tss_merged/all_cs.tss_merged_quant_cs.txt",
+        quant_cs_in=INTERMEDIATE_DIR + "/tss_merged/all_cs.tss_merged_quant_in.txt",
+        quant_in_cs=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged_quant_cs.txt",
+        quant_in_in=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged_quant_in.txt",
         stats_cs=OUTPUT_DIR + "/qc/stats_cs.txt",
         stats_in=OUTPUT_DIR + "/qc/stats_in.txt",
-        tss_cs=OUTPUT_DIR + "/all_cs.tss_merged.bed",
-        tss_in=OUTPUT_DIR + "/all_in.tss_merged.bed",
+        tss_cs=INTERMEDIATE_DIR + "/tss_merged/all_cs.tss_merged.bed",
+        tss_in=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged.bed",
     output:
         qc_cs=OUTPUT_DIR + "/qc/qc_cs.txt",
         qc_in=OUTPUT_DIR + "/qc/qc_in.txt",
+    resources:
+        mem_mb=2000,
     params:
         mirnas=config["qc"]["mirnas"],
         trnas=config["qc"]["trnas"],
@@ -593,16 +657,20 @@ rule qc_initial_tss:
 
 
 rule collect_consensus_tss:
+    message:
+        "Building consensus TSS set"
     input:
         tss_cs=list(
             (OUTPUT_DIR + "/bed/") + s + ".tss.bed"
             for s in sampletab["id"][sampletab["sample_type"] == "csrna"]
         ),
-        tss_in=OUTPUT_DIR + "/all_in.tss_merged.bed",
+        tss_in=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged.bed",
     output:
         OUTPUT_DIR + "/tss.final.bed",
     benchmark:
         OUTPUT_DIR + "/qc/collect_consensus_tss.benchmark.txt",
+    resources:
+        mem_mb=2000,
     params:
         min_reps=config["filtering"]["tss_min_reps"],
         sample_names=" ".join(list(sampletab["sample_name"])),
@@ -611,11 +679,15 @@ rule collect_consensus_tss:
         bed_dir=OUTPUT_DIR + "/bed",
         bg_dir=OUTPUT_DIR + "/bedgraph",
         chrom_sizes=config["chrom_sizes"],
+        mirnas=config["qc"]["mirnas"],
+        trnas=config["qc"]["trnas"],
     script:
         "scripts/collect_consensus_tss.R"
 
 
 rule quantify_final_tss:
+    message:
+        "Quantifying consensus TSSs"
     input:
         tss=OUTPUT_DIR + "/tss.final.bed",
         td=list(
@@ -628,6 +700,8 @@ rule quantify_final_tss:
         OUTPUT_DIR + "/qc/quantify_final_tss.log",
     benchmark:
         OUTPUT_DIR + "/qc/quantify_final_tss.benchmark.txt",
+    resources:
+        mem_mb=4000,
     params:
         genome=config["program"]["homer"]["genome"],
     shell:
@@ -639,6 +713,8 @@ rule quantify_final_tss:
 
 
 rule normalize_tss_quantification:
+    message:
+        "TMM-normalising TSS counts"
     input:
         quant=OUTPUT_DIR + "/tss.homer.raw.txt",
         bed=OUTPUT_DIR + "/tss.final.bed",
@@ -648,15 +724,19 @@ rule normalize_tss_quantification:
         normfactors=OUTPUT_DIR + "/norm_factors.txt",
     benchmark:
         OUTPUT_DIR + "/qc/normalize_tss_quantification.benchmark.txt",
+    resources:
+        mem_mb=2000,
     script:
         "scripts/normalize_tss_quantification.R"
 
 
 rule generate_normalized_bw:
+    message:
+        "Generating normalized bigWigs for {wildcards.sample_cs}"
     input:
         normfactors=OUTPUT_DIR + "/norm_factors.txt",
         bed=OUTPUT_DIR + "/tss.final.bed",
-        srna=OUTPUT_DIR + "/all_in.tss_merged.bed",
+        srna=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged.bed",
         bg_p=OUTPUT_DIR + "/bedgraph/{sample_cs}.raw.pos.bedGraph.gz",
         bg_n=OUTPUT_DIR + "/bedgraph/{sample_cs}.raw.neg.bedGraph.gz",
     output:
@@ -664,6 +744,8 @@ rule generate_normalized_bw:
         bw_n=OUTPUT_DIR + "/bw/{sample_cs}.rpm.neg.bw",
     benchmark:
         OUTPUT_DIR + "/qc/{sample_cs}.generate_bw.benchmark.txt",
+    resources:
+        mem_mb=2000,
     params:
         cs=config["chrom_sizes"],
         mask_srnas=config["filtering"]["mask_srnas_from_bw"],

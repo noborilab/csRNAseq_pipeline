@@ -66,6 +66,7 @@ HOMER genome name (e.g. `tair10`, `hg38`). Must match a genome configured in you
 
 | Rule | Description |
 |------|-------------|
+| `build_index` | (Conditional) Build a genome index for the selected aligner from `genome_fasta` if no index is found at `genome_index`. |
 | `trim` | Adapter trimming and length truncation (bfqutils). Stats written to `qc/`. |
 | `align` | Genome alignment (bwa-aln / bwa-mem / STAR / bowtie2 / hisat2), MAPQ and length filtering, BAM sorting and indexing. |
 | `make_tagdir` | HOMER tag directory from BAM. |
@@ -75,7 +76,7 @@ HOMER genome name (e.g. `tair10`, `hg38`). Must match a genome configured in you
 | `merge_initial_tss` | Strand-aware merge of all per-sample TSS BEDs. Chromosomes not in `chrom_sizes` are excluded. |
 | `quantify_initial_{cs,in}_tss` | HOMER `annotatePeaks.pl` quantification of merged TSS sets in all libraries. |
 | `qc_initial_tss` | Calculate FRiP, nuclear read %, csRNA enrichment, miRNA depletion, and phosphorylation efficiency. Samples with FRiP < `min_cs_frip` or nuclear % < `min_pct_nuclear` are flagged as FAIL. |
-| `collect_consensus_tss` | Build the final consensus TSS set from csRNA samples, requiring detection in at least `tss_min_reps` replicates. TSSs narrower than 150 bp are padded; overlapping TSSs are split. |
+| `collect_consensus_tss` | Build the final consensus TSS set from csRNA samples, requiring detection in at least `tss_min_reps` replicates. TSSs narrower than 150 bp are padded; overlapping TSSs are split. TSSs overlapping miRNA / pre-tRNA loci (if `qc / mirnas` and `qc / trnas` are set) are removed. |
 | `quantify_final_tss` | HOMER quantification of the consensus TSSs in all csRNA libraries. |
 | `normalize_tss_quantification` | TMM normalization (edgeR `TMMwsp`) of raw tag counts. |
 | `generate_normalized_bw` | Multiply raw bedGraphs by RPM scale factors and export as bigWig. Small RNA regions can optionally be masked. |

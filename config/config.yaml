@@ -14,8 +14,6 @@ program:
     sequencing_adapter: "AGATCGGAAGAGCACACGTCTGAACTCCAGTCA"
     use_pigz: True
     pigz_threads: 4
-  # Max read length allowed after merging/trimming:
-  max_read_length: 70
   # Number of threads for alignment per sample (will not surpass --cores)
   alignment_threads: 4
   # Alignment program: [bwa-aln, bwa-mem, STAR, bowtie2]
@@ -62,6 +60,8 @@ filtering:
   alignment_mapq: 30
   include_flags: 0
   exclude_flags: 2308
+  # Max read length allowed after merging/trimming:
+  max_read_length: 70
   min_alignment_length: 15
   max_mismatch: 999
   tss_min_reps: 1
