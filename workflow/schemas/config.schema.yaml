@@ -292,6 +292,17 @@ properties:
   qc:
     type: object
     properties:
+      organelle_chroms:
+        type: array
+        items:
+          type: string
+        default: ["Pt", "Mt"]
+        description: >
+          List of chromosome names to treat as organellar (non-nuclear).
+          Reads mapping to these chromosomes are subtracted from the total
+          to compute PctNuclear. For human data use ["chrM"]; for
+          Arabidopsis the default ["Pt", "Mt"] is correct. Set to [] to
+          skip organelle subtraction.
       mirnas:
         type: string
         default: ""

@@ -76,6 +76,8 @@ files:
   intermediate_dir: "results"
 
 qc:
+  # Chromosome names treated as organellar (excluded from PctNuclear calculation)
+  organelle_chroms: ["Pt", "Mt"]
   mirnas: "/Users/gok24jef/csRNAseq/data/Araport11_miRNA.bed"
   trnas: "/Users/gok24jef/csRNAseq/data/Araport11_pre-tRNA.bed"
   min_cs_frip: 0.9

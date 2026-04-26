@@ -30,8 +30,8 @@ f_trna <- trimws(TRNAS)
 mirna <- if (nchar(f_mirna)) import(f_mirna) else NULL
 trna <- if (nchar(f_trna)) import(f_trna) else NULL
 
-stats_cs[['NuclearReads']] <- with(stats_cs, TotalReads - (PtReads + MtReads))
-stats_in[['NuclearReads']] <- with(stats_in, TotalReads - (PtReads + MtReads))
+stats_cs[['NuclearReads']] <- with(stats_cs, TotalReads - OrganelleReads)
+stats_in[['NuclearReads']] <- with(stats_in, TotalReads - OrganelleReads)
 stats_cs[['PctNuclear']] <- 100 * (stats_cs[['NuclearReads']] / stats_cs[['TotalReads']])
 stats_in[['PctNuclear']] <- 100 * (stats_in[['NuclearReads']] / stats_in[['TotalReads']])
 

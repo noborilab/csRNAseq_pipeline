@@ -512,10 +512,11 @@ rule gather_stats:
         cs_names=" ".join(list(sampletab["id"][sampletab["sample_type"] == "csrna"])),
         in_names=" ".join(list(sampletab["id"][sampletab["sample_type"] == "input"])),
         prefix=OUTPUT_DIR + "/tagdir",
+        organelle_chroms=" ".join(config["qc"].get("organelle_chroms", ["Pt", "Mt"])),
     shell:
         """
-            OUT_PREFIX={params.prefix} OUT={output.cs} bash workflow/scripts/gather_stats.sh {params.cs_names}
-            OUT_PREFIX={params.prefix} OUT={output.inp} bash workflow/scripts/gather_stats.sh {params.in_names}
+            OUT_PREFIX={params.prefix} OUT={output.cs} ORGANELLE_CHROMS="{params.organelle_chroms}" bash workflow/scripts/gather_stats.sh {params.cs_names}
+            OUT_PREFIX={params.prefix} OUT={output.inp} ORGANELLE_CHROMS="{params.organelle_chroms}" bash workflow/scripts/gather_stats.sh {params.in_names}
         """
 
 
