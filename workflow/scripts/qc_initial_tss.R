@@ -12,6 +12,7 @@ MIRNAS <- snakemake@params[["mirnas"]]
 TRNAS <- snakemake@params[["trnas"]]
 OUT_CS <- snakemake@output[["qc_cs"]]
 OUT_IN <- snakemake@output[["qc_in"]]
+OUT_REPLCOR <- snakemake@output[["repl_cor"]]
 
 tss_cs <- import(trimws(TSS_CS))
 tss_in <- import(trimws(TSS_IN))
@@ -85,6 +86,54 @@ stats_cs[['csRNACappedPct']] <- 100 * stats_cs[['csFRiP']]
 stats_cs[['InputCappedPct']] <- 100 * stats_in_cs[['csFRiP']]
 stats_cs[['csEnrichment']] <- stats_cs[['csFRiP']] / stats_in_cs[['csFRiP']]
 stats_cs[['sDepletion']] <- 1 / (stats_cs[['sFRiP']] / stats_in_cs[['sFRiP']])
+
+# Strand balance: fraction of reads on the + strand. ~0.5 in csRNA libraries;
+# can deviate from 0.5 in input libraries because small-RNA biology is genuinely
+# strand-skewed at a few highly expressed loci.
+stats_cs[['StrandBalance']] <- with(stats_cs, PosReads / (PosReads + NegReads))
+stats_in[['StrandBalance']] <- with(stats_in, PosReads / (PosReads + NegReads))
+
+# TSS saturation: fraction of merged-set TSSs detected (>=1 tag) in this library.
+# Low values flag undersequenced libraries.
+stats_cs[['TSSDetected']] <- colMeans(as.matrix(quant_csTSS_csRNA_m) > 0)[stats_cs[['Sample']]]
+stats_in[['TSSDetected']] <- colMeans(as.matrix(quant_inTSS_input_m) > 0)[stats_in[['Sample']]]
+
+# Replicate correlation: per-sample minimum Spearman correlation with another
+# csRNA replicate of the same sample_name. NA when only one replicate exists.
+# Spearman is preferred over Pearson because csRNA tag counts are heavy-tailed.
+stats_cs[['MinReplCorr']] <- NA_real_
+repl_cor_long <- list()
+for (k in unique(stats_cs[['key']])) {
+    samples_k <- stats_cs[['Sample']][stats_cs[['key']] == k]
+    if (length(samples_k) < 2) next
+    m_k <- as.matrix(quant_csTSS_csRNA_m[, samples_k])
+    cor_m <- cor(m_k, method = 'spearman')
+    diag(cor_m) <- NA
+    stats_cs[stats_cs[['key']] == k, 'MinReplCorr'] <-
+        apply(cor_m, 1, min, na.rm = TRUE)[samples_k]
+    pairs <- which(upper.tri(cor_m), arr.ind = TRUE)
+    if (nrow(pairs)) {
+        repl_cor_long[[k]] <- data.frame(
+            Group = k,
+            SampleA = rownames(cor_m)[pairs[, 1]],
+            SampleB = colnames(cor_m)[pairs[, 2]],
+            SpearmanCor = cor_m[pairs],
+            stringsAsFactors = FALSE
+        )
+    }
+}
+if (length(repl_cor_long)) {
+    repl_cor_df <- do.call(rbind, repl_cor_long)
+} else {
+    repl_cor_df <- data.frame(
+        Group = character(),
+        SampleA = character(),
+        SampleB = character(),
+        SpearmanCor = numeric(),
+        stringsAsFactors = FALSE
+    )
+}
+readr::write_tsv(repl_cor_df, OUT_REPLCOR)
 
 if (!is.null(trna)) {
     in_pretrna <- mcols(tss_in)[['name']][overlapsAny(tss_in, trna)]

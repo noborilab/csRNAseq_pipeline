@@ -108,6 +108,7 @@ All outputs land in `files / output_dir` (default: `results/`):
 | `bw/{sample}.rpm.neg.bw` | Reverse-strand RPM-normalized bigWig (scores are negative). |
 | `qc/qc_cs.txt` | Per-sample QC metrics for csRNA libraries (FRiP, enrichment, etc.). |
 | `qc/qc_in.txt` | Per-sample QC metrics for input libraries. |
+| `qc/replicate_correlation.txt` | Pairwise Spearman correlation between csRNA replicates of the same `sample_name`. Empty if no `sample_name` has ≥ 2 replicates. |
 | `qc/{sample}.trimming.txt` | bfqutils trimming summary. |
 | `qc/{sample}.aln.txt` | samtools flagstat alignment summary. |
 | `qc/{sample}.aligner.log` | Aligner stderr (bwa/STAR/bowtie2/hisat2). |
@@ -126,4 +127,7 @@ The `qc_cs.txt` / `qc_in.txt` tables contain:
 | `PretRNAPct` | Fraction of input-TSS reads overlapping pre-tRNA loci (requires `qc / trnas`). |
 | `PhosEfficiency` | Ratio of pre-tRNA depletion in csRNA vs input — measures 5′-phosphate removal efficiency. |
 | `miRNADepletion` | Ratio of miRNA depletion in csRNA vs input — an independent phosphorylation efficiency metric (requires `qc / mirnas`). |
+| `StrandBalance` | Fraction of mapped reads on the + strand. Expect ~0.5 in csRNA libraries; large deviations flag adapter contamination, library-prep strand bias, or pile-ups at a few highly expressed loci. Looser bounds in input libraries since small-RNA biology is genuinely strand-skewed. |
+| `TSSDetected` | Fraction of merged-set TSSs with ≥ 1 tag in this library. Low values flag undersequenced libraries. |
+| `MinReplCorr` | Minimum Spearman correlation between this sample's TSS counts and any other csRNA replicate of the same `sample_name`. `NA` when only one replicate exists. Sharp drops (e.g. < 0.9) flag sample swaps or replicate dropouts. csRNA samples only. |
 | `Status` | `Ok` or `FAIL` based on `min_cs_frip` and `min_pct_nuclear` thresholds. |

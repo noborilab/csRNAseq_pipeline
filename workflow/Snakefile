@@ -208,6 +208,7 @@ rule all:
         OUTPUT_DIR + "/qc/stats_in.txt",
         OUTPUT_DIR + "/qc/qc_cs.txt",
         OUTPUT_DIR + "/qc/qc_in.txt",
+        OUTPUT_DIR + "/qc/replicate_correlation.txt",
         OUTPUT_DIR + "/tss.final.raw.txt",
         OUTPUT_DIR + "/tss.final.cpm.txt",
         OUTPUT_DIR + "/norm_factors.txt",
@@ -518,6 +519,14 @@ rule gather_stats:
             (OUTPUT_DIR + "/tagdir/") + s
             for s in sampletab["id"][sampletab["sample_type"] == "input"]
         ),
+        bg_pos=list(
+            OUTPUT_DIR + "/bedgraph/" + s + ".raw.pos.bedGraph.gz"
+            for s in sampletab["id"]
+        ),
+        bg_neg=list(
+            OUTPUT_DIR + "/bedgraph/" + s + ".raw.neg.bedGraph.gz"
+            for s in sampletab["id"]
+        ),
     output:
         cs=OUTPUT_DIR + "/qc/stats_cs.txt",
         inp=OUTPUT_DIR + "/qc/stats_in.txt",
@@ -529,11 +538,12 @@ rule gather_stats:
         cs_names=" ".join(list(sampletab["id"][sampletab["sample_type"] == "csrna"])),
         in_names=" ".join(list(sampletab["id"][sampletab["sample_type"] == "input"])),
         prefix=OUTPUT_DIR + "/tagdir",
+        bg_prefix=OUTPUT_DIR + "/bedgraph",
         organelle_chroms=" ".join(config.get("qc", {}).get("organelle_chroms", ["Pt", "Mt"])),
     shell:
         """
-            OUT_PREFIX={params.prefix} OUT={output.cs} ORGANELLE_CHROMS="{params.organelle_chroms}" bash workflow/scripts/gather_stats.sh {params.cs_names}
-            OUT_PREFIX={params.prefix} OUT={output.inp} ORGANELLE_CHROMS="{params.organelle_chroms}" bash workflow/scripts/gather_stats.sh {params.in_names}
+            OUT_PREFIX={params.prefix} BG_PREFIX={params.bg_prefix} OUT={output.cs} ORGANELLE_CHROMS="{params.organelle_chroms}" bash workflow/scripts/gather_stats.sh {params.cs_names}
+            OUT_PREFIX={params.prefix} BG_PREFIX={params.bg_prefix} OUT={output.inp} ORGANELLE_CHROMS="{params.organelle_chroms}" bash workflow/scripts/gather_stats.sh {params.in_names}
         """
 
 
@@ -671,6 +681,7 @@ rule qc_initial_tss:
     output:
         qc_cs=OUTPUT_DIR + "/qc/qc_cs.txt",
         qc_in=OUTPUT_DIR + "/qc/qc_in.txt",
+        repl_cor=OUTPUT_DIR + "/qc/replicate_correlation.txt",
     resources:
         mem_mb=2000,
     params:
