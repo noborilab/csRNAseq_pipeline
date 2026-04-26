@@ -151,8 +151,6 @@ for i in range(sampletab.shape[0]):
 
 conda: "workflow/envs/env.yaml"
 
-report: "report/workflow.rst"
-
 
 rule all:
     input:
@@ -452,18 +450,8 @@ rule gather_stats:
             for s in sampletab["id"][sampletab["sample_type"] == "input"]
         ),
     output:
-        cs=report(
-            OUTPUT_DIR + "/qc/stats_cs.txt",
-            caption="report/stats_cs.rst",
-            category="QC",
-            labels={"library": "csRNA"},
-        ),
-        inp=report(
-            OUTPUT_DIR + "/qc/stats_in.txt",
-            caption="report/stats_in.rst",
-            category="QC",
-            labels={"library": "input"},
-        ),
+        cs=OUTPUT_DIR + "/qc/stats_cs.txt",
+        inp=OUTPUT_DIR + "/qc/stats_in.txt",
     benchmark:
         OUTPUT_DIR + "/qc/gather_stats.benchmark.txt",
     params:
@@ -595,18 +583,8 @@ rule qc_initial_tss:
         tss_cs=OUTPUT_DIR + "/all_cs.tss_merged.bed",
         tss_in=OUTPUT_DIR + "/all_in.tss_merged.bed",
     output:
-        qc_cs=report(
-            OUTPUT_DIR + "/qc/qc_cs.txt",
-            caption="report/qc_cs.rst",
-            category="QC",
-            labels={"library": "csRNA"},
-        ),
-        qc_in=report(
-            OUTPUT_DIR + "/qc/qc_in.txt",
-            caption="report/qc_in.rst",
-            category="QC",
-            labels={"library": "input"},
-        ),
+        qc_cs=OUTPUT_DIR + "/qc/qc_cs.txt",
+        qc_in=OUTPUT_DIR + "/qc/qc_in.txt",
     params:
         mirnas=config["qc"]["mirnas"],
         trnas=config["qc"]["trnas"],
@@ -622,11 +600,7 @@ rule collect_consensus_tss:
         ),
         tss_in=OUTPUT_DIR + "/all_in.tss_merged.bed",
     output:
-        report(
-            OUTPUT_DIR + "/tss.final.bed",
-            caption="report/tss_final_bed.rst",
-            category="Results",
-        ),
+        OUTPUT_DIR + "/tss.final.bed",
     benchmark:
         OUTPUT_DIR + "/qc/collect_consensus_tss.benchmark.txt",
     params:
@@ -670,16 +644,8 @@ rule normalize_tss_quantification:
         bed=OUTPUT_DIR + "/tss.final.bed",
     output:
         raw=OUTPUT_DIR + "/tss.final.raw.txt",
-        norm=report(
-            OUTPUT_DIR + "/tss.final.cpm.txt",
-            caption="report/tss_cpm.rst",
-            category="Results",
-        ),
-        normfactors=report(
-            OUTPUT_DIR + "/norm_factors.txt",
-            caption="report/norm_factors.rst",
-            category="Results",
-        ),
+        norm=OUTPUT_DIR + "/tss.final.cpm.txt",
+        normfactors=OUTPUT_DIR + "/norm_factors.txt",
     benchmark:
         OUTPUT_DIR + "/qc/normalize_tss_quantification.benchmark.txt",
     script:
