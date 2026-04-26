@@ -1,6 +1,6 @@
 ## Overview
 
-This pipeline processes paired csRNA-seq (capped small RNA) and input (total RNA) libraries to identify and quantify transcription start sites (TSSs) genome-wide. It was developed for *Arabidopsis thaliana* but is usable with any organism whose genome is configured in HOMER.
+This pipeline processes paired csRNA-seq (capped small RNA) and input (total RNA) libraries to identify and quantify transcription start sites (TSSs) genome-wide. It works with any organism whose genome is supported by HOMER, and has been tested with *Arabidopsis thaliana* datasets.
 
 ## Installation
 
@@ -17,7 +17,9 @@ Two tools **must be installed manually** before running the pipeline — they ar
 
 - **HOMER** — follow the instructions at http://homer.ucsd.edu/homer/introduction/install.html. After installation, configure the target genome, e.g.:
   ```bash
-  perl configureHomer.pl -install tair10
+  perl configureHomer.pl -install hg38    # human
+  perl configureHomer.pl -install mm10    # mouse
+  perl configureHomer.pl -install tair10  # Arabidopsis
   ```
 - **bfqutils** — see the project repository for installation instructions.
 
@@ -52,7 +54,18 @@ sample1	input	sample1.input.r1.fq.gz	sample1.input.r2.fq.gz
 
 ### `chrom_sizes`
 
-A two-column (chromosome name, size in bp) TSV **without a header**. A samtools fai index can be used directly. This file controls which chromosomes are kept throughout the pipeline: only chromosomes listed here appear in merged TSSs, the final consensus TSS set, and bigWig tracks. To exclude organellar chromosomes (e.g. `Mt`, `Pt` in Arabidopsis; `chrM` in human), simply omit them from this file.
+A two-column (chromosome name, size in bp) TSV **without a header**. A samtools fai index can be used directly. This file controls which chromosomes are kept throughout the pipeline: only chromosomes listed here appear in merged TSSs, the final consensus TSS set, and bigWig tracks. To exclude organellar or other non-nuclear chromosomes, omit them from this file.
+
+### `qc / organelle_chroms`
+
+List of chromosome names to treat as organellar when computing the percentage of nuclear reads (`PctNuclear`). Reads mapping to these chromosomes are subtracted from the total aligned count. Default: `["Pt", "Mt"]` (Arabidopsis). Examples for other organisms:
+
+```yaml
+qc:
+  organelle_chroms: ["chrM"]          # human / mouse
+  organelle_chroms: ["Mt", "Pt"]      # Arabidopsis
+  organelle_chroms: []                # skip organelle subtraction
+```
 
 ### `program / genome_index`
 
@@ -60,7 +73,7 @@ Path to the pre-built genome index for the selected aligner. If the index does n
 
 ### `program / homer / genome`
 
-HOMER genome name (e.g. `tair10`, `hg38`). Must match a genome configured in your HOMER installation.
+HOMER genome name (e.g. `hg38`, `mm10`, `tair10`). Must match a genome configured in your HOMER installation.
 
 ## Workflow Steps
 
@@ -107,7 +120,7 @@ The `qc_cs.txt` / `qc_in.txt` tables contain:
 |--------|-------------|
 | `csFRiP` | Fraction of nuclear reads falling in csRNA-called TSSs. Should be > 0.9 for a good csRNA library. |
 | `sFRiP` | Fraction of nuclear reads in input-called (small RNA) TSSs. |
-| `PctNuclear` | Percentage of reads mapping to nuclear chromosomes. |
+| `PctNuclear` | Percentage of reads mapping to nuclear chromosomes (i.e. excluding `qc / organelle_chroms`). |
 | `csEnrichment` | Ratio of csRNA FRiP to input FRiP — measures how enriched capped initiation signal is relative to the background. |
 | `sDepletion` | Inverse ratio of small RNA signal between csRNA and input libraries. |
 | `PretRNAPct` | Fraction of input-TSS reads overlapping pre-tRNA loci (requires `qc / trnas`). |
