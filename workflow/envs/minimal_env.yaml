@@ -1,0 +1,18 @@
+name: csRNAseq_snakemake
+channels:
+- bioconda
+- conda-forge
+dependencies:
+- bedtools
+- bioconductor-edger
+- bioconductor-genomeinfodbdata
+- bioconductor-rtracklayer
+- bwa
+- pandas
+- r-matrixstats
+- r-readr
+- samtools
+- snakefmt
+- snakemake
+- vim
+
