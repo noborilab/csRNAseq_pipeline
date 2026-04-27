@@ -98,26 +98,31 @@ stats_in[['StrandBalance']] <- with(stats_in, PosReads / (PosReads + NegReads))
 stats_cs[['TSSDetected']] <- colMeans(as.matrix(quant_csTSS_csRNA_m) > 0)[stats_cs[['Sample']]]
 stats_in[['TSSDetected']] <- colMeans(as.matrix(quant_inTSS_input_m) > 0)[stats_in[['Sample']]]
 
-# Replicate correlation: per-sample minimum Spearman correlation with another
-# csRNA replicate of the same sample_name. NA when only one replicate exists.
-# Spearman is preferred over Pearson because csRNA tag counts are heavy-tailed.
-stats_cs[['MinReplCorr']] <- NA_real_
+# Replicate correlation: per-sample minimum Spearman and Pearson (log1p) correlation
+# with another csRNA replicate of the same sample_name. NA when only one replicate exists.
+stats_cs[['MinReplCorrSpearman']] <- NA_real_
+stats_cs[['MinReplCorrPearson']]  <- NA_real_
 repl_cor_long <- list()
 for (k in unique(stats_cs[['key']])) {
     samples_k <- stats_cs[['Sample']][stats_cs[['key']] == k]
     if (length(samples_k) < 2) next
     m_k <- as.matrix(quant_csTSS_csRNA_m[, samples_k])
-    cor_m <- cor(m_k, method = 'spearman')
-    diag(cor_m) <- NA
-    stats_cs[stats_cs[['key']] == k, 'MinReplCorr'] <-
-        apply(cor_m, 1, min, na.rm = TRUE)[samples_k]
-    pairs <- which(upper.tri(cor_m), arr.ind = TRUE)
+    cor_sp <- cor(m_k, method = 'spearman')
+    cor_pe <- cor(log1p(m_k), method = 'pearson')
+    diag(cor_sp) <- NA
+    diag(cor_pe) <- NA
+    stats_cs[stats_cs[['key']] == k, 'MinReplCorrSpearman'] <-
+        apply(cor_sp, 1, min, na.rm = TRUE)[samples_k]
+    stats_cs[stats_cs[['key']] == k, 'MinReplCorrPearson'] <-
+        apply(cor_pe, 1, min, na.rm = TRUE)[samples_k]
+    pairs <- which(upper.tri(cor_sp), arr.ind = TRUE)
     if (nrow(pairs)) {
         repl_cor_long[[k]] <- data.frame(
             Group = k,
-            SampleA = rownames(cor_m)[pairs[, 1]],
-            SampleB = colnames(cor_m)[pairs[, 2]],
-            SpearmanCor = cor_m[pairs],
+            SampleA = rownames(cor_sp)[pairs[, 1]],
+            SampleB = colnames(cor_sp)[pairs[, 2]],
+            SpearmanCor = cor_sp[pairs],
+            PearsonCor  = cor_pe[pairs],
             stringsAsFactors = FALSE
         )
     }
@@ -130,6 +135,7 @@ if (length(repl_cor_long)) {
         SampleA = character(),
         SampleB = character(),
         SpearmanCor = numeric(),
+        PearsonCor  = numeric(),
         stringsAsFactors = FALSE
     )
 }

@@ -129,5 +129,6 @@ The `qc_cs.txt` / `qc_in.txt` tables contain:
 | `miRNADepletion` | Ratio of miRNA depletion in csRNA vs input — an independent phosphorylation efficiency metric (requires `qc / mirnas`). |
 | `StrandBalance` | Fraction of mapped reads on the + strand. Expect ~0.5 in csRNA libraries; large deviations flag adapter contamination, library-prep strand bias, or pile-ups at a few highly expressed loci. Looser bounds in input libraries since small-RNA biology is genuinely strand-skewed. |
 | `TSSDetected` | Fraction of merged-set TSSs with ≥ 1 tag in this library. Low values flag undersequenced libraries. |
-| `MinReplCorr` | Minimum Spearman correlation between this sample's TSS counts and any other csRNA replicate of the same `sample_name`. `NA` when only one replicate exists. Sharp drops (e.g. < 0.9) flag sample swaps or replicate dropouts. csRNA samples only. |
+| `MinReplCorrSpearman` | Minimum Spearman correlation between this sample's TSS counts and any other csRNA replicate of the same `sample_name`. `NA` when only one replicate exists. Sharp drops (e.g. < 0.9) flag sample swaps or replicate dropouts. csRNA samples only. |
+| `MinReplCorrPearson` | Same as above but Pearson correlation on log1p-transformed counts. |
 | `Status` | `Ok` or `FAIL` based on `min_cs_frip` and `min_pct_nuclear` thresholds. |

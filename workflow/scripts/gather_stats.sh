@@ -26,8 +26,8 @@ for i in "$@"; do
     # Sum raw read counts on each strand from the bedGraphs (negative strand
     # values are stored as negative numbers by HOMER, so negate to recover the
     # positive read count). Each bedGraph interval is value * (end - start) reads.
-    zcat "$bg_pos" | awk 'NF >= 4 && $2 ~ /^[0-9]+$/ {sum += $4 * ($3 - $2)} END {printf "%.0f", sum+0}' >> "$OUT"
+    gunzip -c "$bg_pos" | awk 'NF >= 4 && $2 ~ /^[0-9]+$/ {sum += $4 * ($3 - $2)} END {printf "%.0f", sum+0}' >> "$OUT"
     printf "\t" >> "$OUT"
-    zcat "$bg_neg" | awk 'NF >= 4 && $2 ~ /^[0-9]+$/ {sum += -$4 * ($3 - $2)} END {printf "%.0f", sum+0}' >> "$OUT"
+    gunzip -c "$bg_neg" | awk 'NF >= 4 && $2 ~ /^[0-9]+$/ {sum += $4 * ($3 - $2)} END {printf "%.0f", sum+0}' >> "$OUT"
     printf "\n" >> "$OUT"
 done
