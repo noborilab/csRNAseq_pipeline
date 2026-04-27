@@ -1,4 +1,4 @@
-suppressMessages(suppressPackageStartupMessages(library(rtracklayer)))
+suppressWarnings(suppressMessages(suppressPackageStartupMessages(library(rtracklayer))))
 
 # Use pre-cleaned IDs passed from Snakefile directly to avoid ID reconstruction mismatch
 all_ids    <- strsplit(snakemake@params[["ids"]],          " ", fixed = TRUE)[[1]]

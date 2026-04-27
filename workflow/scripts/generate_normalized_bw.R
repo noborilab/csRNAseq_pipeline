@@ -1,4 +1,4 @@
-suppressMessages(suppressPackageStartupMessages(library(rtracklayer)))
+suppressWarnings(suppressMessages(suppressPackageStartupMessages(library(rtracklayer))))
 
 tss <- import(snakemake@input[["bed"]])
 

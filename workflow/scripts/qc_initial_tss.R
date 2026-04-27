@@ -1,4 +1,4 @@
-suppressMessages(suppressPackageStartupMessages(library(rtracklayer)))
+suppressWarnings(suppressMessages(suppressPackageStartupMessages(library(rtracklayer))))
 
 QUANT_csTSS_csRNA <- snakemake@input[["quant_cs_cs"]]
 QUANT_csTSS_input <- snakemake@input[["quant_cs_in"]]
@@ -32,10 +32,10 @@ if (anyNA(m)) {
 }
 stats_in_cs <- stats_in[m, ]
 
-quant_csTSS_csRNA <- suppressMessages(readr::read_tsv(trimws(QUANT_csTSS_csRNA)))
-quant_csTSS_input <- suppressMessages(readr::read_tsv(trimws(QUANT_csTSS_input)))
-quant_inTSS_csRNA <- suppressMessages(readr::read_tsv(trimws(QUANT_inTSS_csRNA)))
-quant_inTSS_input <- suppressMessages(readr::read_tsv(trimws(QUANT_inTSS_input)))
+quant_csTSS_csRNA <- suppressWarnings(suppressMessages(readr::read_tsv(trimws(QUANT_csTSS_csRNA))))
+quant_csTSS_input <- suppressWarnings(suppressMessages(readr::read_tsv(trimws(QUANT_csTSS_input))))
+quant_inTSS_csRNA <- suppressWarnings(suppressMessages(readr::read_tsv(trimws(QUANT_inTSS_csRNA))))
+quant_inTSS_input <- suppressWarnings(suppressMessages(readr::read_tsv(trimws(QUANT_inTSS_input))))
 
 f_mirna <- trimws(MIRNAS)
 f_trna <- trimws(TRNAS)

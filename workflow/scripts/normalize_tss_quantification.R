@@ -1,9 +1,9 @@
-suppressMessages(suppressPackageStartupMessages(library(edgeR)))
-suppressMessages(suppressPackageStartupMessages(library(rtracklayer)))
+suppressWarnings(suppressMessages(suppressPackageStartupMessages(library(edgeR))))
+suppressWarnings(suppressMessages(suppressPackageStartupMessages(library(rtracklayer))))
 
 tss <- import(snakemake@input[["bed"]])
 
-quant <- as.data.frame(suppressMessages(readr::read_tsv(trimws(snakemake@input[["quant"]]))))
+quant <- as.data.frame(suppressWarnings(suppressMessages(readr::read_tsv(trimws(snakemake@input[["quant"]])))))
 tag_cols <- grep(" Tag Count", colnames(quant))
 quant_m <- as.matrix(quant[, tag_cols])
 colnames(quant_m) <- basename(gsub(' Tag Count .+', '', colnames(quant_m)))
