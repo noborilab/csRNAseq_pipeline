@@ -199,11 +199,11 @@ if _min_reps > _reps_per_cond.min():
 for i in range(sampletab.shape[0]):
     if " " in sampletab["read_r1"].iloc[i]:
         sys.exit(
-            f"ERROR: FastQ filenames cannot contain spaces [{sampletab["read_r1"].iloc[i]}]"
+            f"ERROR: FastQ filenames cannot contain spaces [{sampletab['read_r1'].iloc[i]}]"
         )
     if " " in sampletab["read_r2"].iloc[i]:
         sys.exit(
-            f"ERROR: FastQ filenames cannot contain spaces [{sampletab["read_r2"].iloc[i]}]"
+            f"ERROR: FastQ filenames cannot contain spaces [{sampletab['read_r2'].iloc[i]}]"
         )
 
 
