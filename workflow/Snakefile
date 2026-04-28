@@ -22,9 +22,13 @@ if "replicate" not in sampletab.columns:
     sampletab["replicate"] = 1
 if "read_r2" not in sampletab.columns:
     sampletab["read_r2"] = ""
+if "input_name" not in sampletab.columns:
+    sampletab["input_name"] = ""
 sampletab["replicate"] = sampletab["replicate"].fillna(1).astype(int)
 sampletab["read_r2"] = sampletab["read_r2"].fillna("").astype(str)
+sampletab["input_name"] = sampletab["input_name"].fillna("").astype(str)
 sampletab["sample_name"] = sampletab["sample_name"].str.strip()
+sampletab["input_name"] = sampletab["input_name"].str.strip()
 sampletab["id"] = list(
     sampletab["sample_name"]
     + "_"
@@ -123,34 +127,54 @@ if NEED_INDEX and not config.get("genome_fasta"):
 
 
 def get_matching_sample(s):
+    """Return the id of the input tag dir paired to csRNA sample s.
+    On csRNA rows, input_name (if set) overrides sample_name for the lookup."""
     s_rep = sampletab.loc[s, "replicate"]
     s_name = sampletab.loc[s, "sample_name"]
     s_type = sampletab.loc[s, "sample_type"]
     if s_type == "csrna":
+        lookup_name = sampletab.loc[s, "input_name"] or s_name
         s_match = sampletab.loc[sampletab["sample_type"] == "input"]
-    elif s_type == "input":
-        s_match = sampletab.loc[sampletab["sample_type"] == "csrna"]
-    if s_match.shape[0] == 0:
-        sys.exit(f"ERROR: All samples must have a matching csrna and input [{s}]")
-    s_match = s_match[s_match["replicate"] == s_rep]
-    if s_match.shape[0] == 0:
-        sys.exit(f"ERROR: All samples must have a matching csrna and input [{s}]")
-    s_match = s_match[s_match["sample_name"] == s_name]
-    if s_match.shape[0] == 0:
-        sys.exit(f"ERROR: All samples must have a matching csrna and input [{s}]")
-    s_match = s_match["id"]
-    if s_match.shape[0] > 1:
+        if s_match.shape[0] == 0:
+            sys.exit(f"ERROR: All samples must have a matching csrna and input [{s}]")
+        s_match = s_match[s_match["replicate"] == s_rep]
+        if s_match.shape[0] == 0:
+            sys.exit(f"ERROR: All samples must have a matching csrna and input [{s}]")
+        s_match = s_match[s_match["sample_name"] == lookup_name]
+        if s_match.shape[0] == 0:
+            sys.exit(f"ERROR: All samples must have a matching csrna and input [{s}]")
+        if s_match.shape[0] > 1:
+            sys.exit(
+                f"ERROR: Each csrna sample must only have a single matching input [{s}]"
+            )
+        return s_match["id"].iloc[0]
+    else:
+        sys.exit(f"ERROR: get_matching_sample called on non-csrna sample [{s}]")
+
+
+def _validate_input_has_dependents(inp):
+    """Check that at least one csRNA sample depends on input sample inp."""
+    inp_rep = sampletab.loc[inp, "replicate"]
+    inp_name = sampletab.loc[inp, "sample_name"]
+    cs_rows = sampletab.loc[sampletab["sample_type"] == "csrna"]
+    effective_names = cs_rows["input_name"].where(
+        cs_rows["input_name"] != "", cs_rows["sample_name"]
+    )
+    dependents = cs_rows[
+        (effective_names == inp_name) & (cs_rows["replicate"] == inp_rep)
+    ]
+    if dependents.shape[0] == 0:
         sys.exit(
-            f"ERROR: Each csrna/input sample must only have a single matching input/csrna [{s}]"
+            f"ERROR: input sample [{inp}] has no csrna samples depending on it. "
+            "Remove it from the sample table or add a matching csrna row."
         )
-    return s_match.iloc[0]
 
 
 # Check that all samples have a single matching cssrna/input before starting
 for cs in sampletab.loc[sampletab["sample_type"] == "csrna", "id"]:
     get_matching_sample(cs)
 for inp in sampletab.loc[sampletab["sample_type"] == "input", "id"]:
-    get_matching_sample(inp)
+    _validate_input_has_dependents(inp)
 
 # Validate tss_min_reps: a value above the maximum replicate count would yield
 # an empty consensus set; a value above the minimum silently drops conditions.
@@ -687,6 +711,13 @@ rule qc_initial_tss:
     params:
         mirnas=config.get("qc", {}).get("mirnas") or "",
         trnas=config.get("qc", {}).get("trnas") or "",
+        cs_ids=" ".join(list(sampletab["id"][sampletab["sample_type"] == "csrna"])),
+        paired_in_ids=" ".join(
+            [
+                get_matching_sample(cs)
+                for cs in sampletab["id"][sampletab["sample_type"] == "csrna"]
+            ]
+        ),
     script:
         "scripts/qc_initial_tss.R"
 

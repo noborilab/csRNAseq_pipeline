@@ -38,18 +38,20 @@ snakemake --cores 6 --configfile config/config.yaml -n
 
 ### `sample_table`
 
-A TSV with at least three columns: `sample_name`, `sample_type`, and `read_r1`. Optional columns: `replicate` and `read_r2`.
+A TSV with at least three columns: `sample_name`, `sample_type`, and `read_r1`. Optional columns: `replicate`, `read_r2`, and `input_name`.
 
-- `sample_name`: Base name shared by a matched csRNA/input pair (and replicates of the same condition). Used to group samples during normalization.
+- `sample_name`: Base name for this library. csRNA/input pairs share the same `sample_name` by default; replicates of the same condition also share it. Used to group samples during normalization.
 - `replicate`: Integer replicate number. Matched csRNA and input libraries must have the same value. Defaults to 1 if the column is absent.
 - `sample_type`: `csrna` or `input`.
 - `read_r1`: Path(s) to R1 FASTQ files. Comma-separate multiple files for the same sample.
 - `read_r2`: Path(s) to R2 FASTQ files for paired-end data. Leave blank for single-end. Mixed single/paired-end datasets are supported by leaving this column empty for the single-end rows.
+- `input_name`: On csRNA rows only, the `sample_name` of the input library to pair with. Use this when multiple csRNA conditions share a single input library (leave blank to use the row's own `sample_name`).
 
 ```
-sample_name	sample_type	read_r1	read_r2
-sample1	csrna	sample1_1.csrna.r1.fq.gz,sample1_2.csrna.r1.fq.gz	
-sample1	input	sample1.input.r1.fq.gz	sample1.input.r2.fq.gz
+sample_name	sample_type	read_r1	read_r2	input_name
+sample1	csrna	sample1_1.csrna.r1.fq.gz,sample1_2.csrna.r1.fq.gz		
+sample1	input	sample1.input.r1.fq.gz	sample1.input.r2.fq.gz	
+sample2	csrna	sample2.csrna.r1.fq.gz		sample1
 ```
 
 ### `chrom_sizes`

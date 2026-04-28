@@ -15,6 +15,9 @@ properties:
   read_r2:
     type: string
     default: ""
+  input_name:
+    type: string
+    default: ""
 required:
   - sample_name
   - sample_type

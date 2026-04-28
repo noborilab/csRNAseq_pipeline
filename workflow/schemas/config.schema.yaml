@@ -8,8 +8,10 @@ properties:
     description: >
       Path to the sample metadata TSV. Must contain columns: sample_name,
       sample_type (csrna|input), read_r1. Optional: replicate (integer,
-      default 1), read_r2 (blank for single-end). Comma-separate multiple
-      FASTQ paths in a single cell.
+      default 1), read_r2 (blank for single-end), input_name (on csRNA rows,
+      the sample_name of the input library to pair with; defaults to the
+      row's own sample_name). Comma-separate multiple FASTQ paths in a
+      single cell.
   chrom_sizes:
     type: string
     description: >

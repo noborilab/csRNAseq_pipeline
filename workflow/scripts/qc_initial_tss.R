@@ -20,17 +20,23 @@ tss_in <- import(trimws(TSS_IN))
 stats_cs <- read.table(trimws(STATS_CS), header=TRUE, stringsAsFactors=FALSE)
 stats_in <- read.table(trimws(STATS_IN), header=TRUE, stringsAsFactors=FALSE)
 
-# Match stats_in rows to stats_cs by (sample_name, replicate) encoded in the Sample ID.
-# IDs have the form {clean_name}_csrna{rep} / {clean_name}_input{rep}; derive the join key
-# by stripping the type+replicate suffix.
-stats_cs[['key']] <- gsub("_csrna[0-9]+$", "", stats_cs[['Sample']])
-stats_in[['key']] <- gsub("_input[0-9]+$", "", stats_in[['Sample']])
-m <- match(stats_cs[['key']], stats_in[['key']])
+# Build the cs->in pairing from the explicit id lists passed by Snakemake.
+# This handles csRNA samples that share an input with a different sample_name
+# (via the input_name column in the sample sheet).
+cs_ids <- strsplit(snakemake@params[["cs_ids"]], " ", fixed = TRUE)[[1]]
+paired_in_ids <- strsplit(snakemake@params[["paired_in_ids"]], " ", fixed = TRUE)[[1]]
+cs_to_in <- setNames(paired_in_ids, cs_ids)
+
+m <- cs_to_in[stats_cs[['Sample']]]
 if (anyNA(m)) {
-  stop("ERROR: could not match all csRNA samples to input samples by name+replicate: ",
+  stop("ERROR: could not find paired input for csRNA sample(s): ",
        paste(stats_cs[['Sample']][is.na(m)], collapse = ", "))
 }
-stats_in_cs <- stats_in[m, ]
+stats_in_cs <- stats_in[match(m, stats_in[['Sample']]), ]
+
+# key: csRNA sample_name group (for replicate correlation grouping).
+# Replicates of the same condition share sample_name, so strip the type+rep suffix.
+stats_cs[['key']] <- gsub("_csrna[0-9]+$", "", stats_cs[['Sample']])
 
 quant_csTSS_csRNA <- suppressWarnings(suppressMessages(readr::read_tsv(trimws(QUANT_csTSS_csRNA))))
 quant_csTSS_input <- suppressWarnings(suppressMessages(readr::read_tsv(trimws(QUANT_csTSS_input))))
