@@ -2,7 +2,6 @@ import os
 from os.path import abspath
 from pathlib import Path
 import pandas as pd
-from pandas.api.types import is_integer_dtype
 from snakemake.utils import validate
 from snakemake.utils import min_version
 
@@ -55,7 +54,7 @@ except:
     sys.exit(
         "chrom.sizes must be a TSV with at least 2 columns, the second of which is an integer column"
     )
-if not is_integer_dtype(chromsizes[1]):
+if not chromsizes[1].dtype.kind == "i":
     sys.exit("The second column of the chrom.sizes file must be integers")
 chromsizes[0] = chromsizes[0].astype(str)
 VALID_CHROMS = chromsizes[0].tolist()
