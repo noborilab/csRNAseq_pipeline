@@ -148,7 +148,16 @@ def get_matching_sample(s):
             )
         return s_match["id"].iloc[0]
     else:
-        sys.exit(f"ERROR: get_matching_sample called on non-csrna sample [{s}]")
+        s_match = sampletab.loc[sampletab["sample_type"] == "csrna"]
+        s_match = s_match[s_match["replicate"] == s_rep]
+        s_match = s_match[s_match["sample_name"] == s_name]
+        if s_match.shape[0] == 0:
+            sys.exit(f"ERROR: All samples must have a matching csrna and input [{s}]")
+        if s_match.shape[0] > 1:
+            sys.exit(
+                f"ERROR: Each input sample must only have a single matching csrna [{s}]"
+            )
+        return s_match["id"].iloc[0]
 
 
 def _validate_input_has_dependents(inp):
