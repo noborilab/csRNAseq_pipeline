@@ -1,6 +1,6 @@
 ## Overview
 
-This pipeline processes paired csRNA-seq (capped small RNA) and input (total RNA) libraries to identify and quantify transcription start sites (TSSs) genome-wide. It works with any organism whose genome is supported by HOMER, and has been tested with *Arabidopsis thaliana* datasets.
+This pipeline processes paired csRNA-seq (capped small RNA) and input (total RNA) libraries to identify and quantify transcription start sites (TSSs) genome-wide. It works with any organism for which you have a genome FASTA, and has been tested with *Arabidopsis thaliana* datasets.
 
 ## Installation
 
@@ -15,7 +15,7 @@ conda activate csRNAseq_snakemake
 
 Two tools **must be installed manually** before running the pipeline — they are not on Bioconda:
 
-- **HOMER** — follow the instructions at http://homer.ucsd.edu/homer/introduction/install.html. After installation, configure the target genome, e.g.:
+- **HOMER** — follow the instructions at http://homer.ucsd.edu/homer/introduction/install.html. After installation, configure the target genome (if it exists as a HOMER genome), e.g.:
   ```bash
   perl configureHomer.pl -install hg38    # human
   perl configureHomer.pl -install mm10    # mouse
@@ -75,7 +75,7 @@ Path to the pre-built genome index for the selected aligner. If the index does n
 
 ### `program / homer / genome`
 
-HOMER genome name (e.g. `hg38`, `mm10`, `tair10`). Must match a genome configured in your HOMER installation.
+HOMER genome name (e.g. `hg38`, `mm10`, `tair10`). Must match a genome configured in your HOMER installation, **or** a file path for a FASTA of your custom genome.
 
 ## Workflow Steps
 
