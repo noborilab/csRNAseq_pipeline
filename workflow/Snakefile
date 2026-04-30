@@ -574,8 +574,8 @@ rule gather_stats:
         organelle_chroms=" ".join(config.get("qc", {}).get("organelle_chroms", ["Pt", "Mt"])),
     shell:
         """
-            OUT_PREFIX={params.prefix} BG_PREFIX={params.bg_prefix} OUT={output.cs} ORGANELLE_CHROMS="{params.organelle_chroms}" bash workflow/scripts/gather_stats.sh {params.cs_names}
-            OUT_PREFIX={params.prefix} BG_PREFIX={params.bg_prefix} OUT={output.inp} ORGANELLE_CHROMS="{params.organelle_chroms}" bash workflow/scripts/gather_stats.sh {params.in_names}
+            OUT_PREFIX={params.prefix} BG_PREFIX={params.bg_prefix} OUT={output.cs} ORGANELLE_CHROMS="{params.organelle_chroms}" bash {workflow.basedir}/scripts/gather_stats.sh {params.cs_names}
+            OUT_PREFIX={params.prefix} BG_PREFIX={params.bg_prefix} OUT={output.inp} ORGANELLE_CHROMS="{params.organelle_chroms}" bash {workflow.basedir}/scripts/gather_stats.sh {params.in_names}
         """
 
 
