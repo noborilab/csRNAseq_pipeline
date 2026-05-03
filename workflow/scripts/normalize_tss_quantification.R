@@ -1,13 +1,26 @@
 suppressWarnings(suppressMessages(suppressPackageStartupMessages(library(edgeR))))
 suppressWarnings(suppressMessages(suppressPackageStartupMessages(library(rtracklayer))))
 
-tss <- import(snakemake@input[["bed"]])
+tss <- import(snakemake@input[["bed"]])   # tss.consensus.bed
 
 quant <- as.data.frame(suppressWarnings(suppressMessages(readr::read_tsv(trimws(snakemake@input[["quant"]])))))
 tag_cols <- grep(" Tag Count", colnames(quant))
 quant_m <- as.matrix(quant[, tag_cols])
 colnames(quant_m) <- basename(gsub(' Tag Count .+', '', colnames(quant_m)))
 rownames(quant_m) <- quant[[1]]
+
+# CPM filter on library-size CPM (before TMM, per edgeR best practice)
+min_cpm     <- snakemake@params[["min_cpm"]]
+min_samples <- snakemake@params[["min_samples"]]
+libsizes <- colSums(quant_m)
+cpm_lib  <- t(t(quant_m) / libsizes) * 1e6
+keep     <- rowSums(cpm_lib >= min_cpm) >= min_samples
+quant_m  <- quant_m[keep, , drop = FALSE]
+tss      <- tss[mcols(tss)[["name"]] %in% rownames(quant_m)]
+cat("CPM filter: kept ", sum(keep), " of ", length(keep), " consensus TSSs\n", sep = "")
+
+export.bed(tss, snakemake@output[["bed"]])
+
 readr::write_tsv(as.data.frame(cbind(TSS = rownames(quant_m), quant_m)),
     snakemake@output[["raw"]])
 

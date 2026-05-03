@@ -241,6 +241,8 @@ rule all:
         OUTPUT_DIR + "/qc/qc_cs.txt",
         OUTPUT_DIR + "/qc/qc_in.txt",
         OUTPUT_DIR + "/qc/replicate_correlation.txt",
+        OUTPUT_DIR + "/qc/qc_final_cs.txt",
+        OUTPUT_DIR + "/qc/qc_final_in.txt",
         OUTPUT_DIR + "/tss.final.raw.txt",
         OUTPUT_DIR + "/tss.final.cpm.txt",
         OUTPUT_DIR + "/norm_factors.txt",
@@ -740,7 +742,7 @@ rule collect_consensus_tss:
         ),
         tss_in=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged.bed",
     output:
-        OUTPUT_DIR + "/tss.final.bed",
+        OUTPUT_DIR + "/tss.consensus.bed",
     benchmark:
         OUTPUT_DIR + "/qc/collect_consensus_tss.benchmark.txt",
     resources:
@@ -764,13 +766,13 @@ rule quantify_final_tss:
     message:
         "Quantifying consensus TSSs"
     input:
-        tss=OUTPUT_DIR + "/tss.final.bed",
+        tss=OUTPUT_DIR + "/tss.consensus.bed",
         td=list(
             (OUTPUT_DIR + "/tagdir/") + s
             for s in sampletab["id"][sampletab["sample_type"] == "csrna"]
         ),
     output:
-        OUTPUT_DIR + "/tss.homer.raw.txt",
+        OUTPUT_DIR + "/tss.consensus.homer.raw.txt",
     log:
         OUTPUT_DIR + "/qc/quantify_final_tss.log",
     benchmark:
@@ -789,11 +791,12 @@ rule quantify_final_tss:
 
 rule normalize_tss_quantification:
     message:
-        "TMM-normalising TSS counts"
+        "Filtering and TMM-normalising TSS counts"
     input:
-        quant=OUTPUT_DIR + "/tss.homer.raw.txt",
-        bed=OUTPUT_DIR + "/tss.final.bed",
+        quant=OUTPUT_DIR + "/tss.consensus.homer.raw.txt",
+        bed=OUTPUT_DIR + "/tss.consensus.bed",
     output:
+        bed=OUTPUT_DIR + "/tss.final.bed",
         raw=OUTPUT_DIR + "/tss.final.raw.txt",
         norm=OUTPUT_DIR + "/tss.final.cpm.txt",
         normfactors=OUTPUT_DIR + "/norm_factors.txt",
@@ -801,6 +804,9 @@ rule normalize_tss_quantification:
         OUTPUT_DIR + "/qc/normalize_tss_quantification.benchmark.txt",
     resources:
         mem_mb=2000,
+    params:
+        min_cpm=config["filtering"].get("tss_min_cpm", 0),
+        min_samples=config["filtering"].get("tss_min_samples", 1),
     script:
         "scripts/normalize_tss_quantification.R"
 
@@ -826,3 +832,59 @@ rule generate_normalized_bw:
         mask_srnas=config["filtering"]["mask_srnas_from_bw"],
     script:
         "scripts/generate_normalized_bw.R"
+
+
+rule quantify_final_in_tss:
+    message:
+        "Quantifying final TSSs in input libraries"
+    input:
+        tss=OUTPUT_DIR + "/tss.final.bed",
+        td=list(
+            (OUTPUT_DIR + "/tagdir/") + s
+            for s in sampletab["id"][sampletab["sample_type"] == "input"]
+        ),
+    output:
+        OUTPUT_DIR + "/tss.final.in.raw.txt",
+    log:
+        OUTPUT_DIR + "/qc/quantify_final_in_tss.log",
+    benchmark:
+        OUTPUT_DIR + "/qc/quantify_final_in_tss.benchmark.txt",
+    resources:
+        mem_mb=4000,
+    params:
+        genome=config["program"]["homer"]["genome"],
+    shell:
+        """
+            annotatePeaks.pl {input.tss} {params.genome} \
+                -strand + -fragLength 1 -raw -d {input.td} \
+                > {output} 2> {log}
+        """
+
+
+rule qc_final_tss:
+    message:
+        "Computing QC metrics on filtered TSS set"
+    benchmark:
+        OUTPUT_DIR + "/qc/qc_final_tss.benchmark.txt",
+    input:
+        quant_cs=OUTPUT_DIR + "/tss.final.raw.txt",
+        quant_in=OUTPUT_DIR + "/tss.final.in.raw.txt",
+        tss_final=OUTPUT_DIR + "/tss.final.bed",
+        tss_consensus=OUTPUT_DIR + "/tss.consensus.bed",
+        stats_cs=OUTPUT_DIR + "/qc/stats_cs.txt",
+        stats_in=OUTPUT_DIR + "/qc/stats_in.txt",
+    output:
+        qc_cs=OUTPUT_DIR + "/qc/qc_final_cs.txt",
+        qc_in=OUTPUT_DIR + "/qc/qc_final_in.txt",
+    resources:
+        mem_mb=2000,
+    params:
+        cs_ids=" ".join(list(sampletab["id"][sampletab["sample_type"] == "csrna"])),
+        paired_in_ids=" ".join(
+            [
+                get_matching_sample(cs)
+                for cs in sampletab["id"][sampletab["sample_type"] == "csrna"]
+            ]
+        ),
+    script:
+        "scripts/qc_final_tss.R"

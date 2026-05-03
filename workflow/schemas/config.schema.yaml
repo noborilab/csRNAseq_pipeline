@@ -268,6 +268,22 @@ properties:
           be included in the final consensus set. Set to 1 to keep all
           TSSs regardless of reproducibility; increase for stricter
           reproducibility filtering.
+      tss_min_cpm:
+        type: number
+        default: 0
+        description: >
+          Minimum CPM (counts per million library-size reads) a TSS must
+          have in a csRNA sample to count as "expressed" in that sample.
+          A TSS is kept in tss.final.bed only if it clears this threshold
+          in at least tss_min_samples csRNA samples. Default 0 disables
+          the filter (every TSS clears 0 CPM in every sample).
+      tss_min_samples:
+        type: integer
+        default: 1
+        description: >
+          Minimum number of csRNA samples that must have CPM ≥ tss_min_cpm
+          for a TSS to be retained in tss.final.bed. Has no effect when
+          tss_min_cpm is 0.
       mask_srnas_from_bw:
         type: boolean
         default: True

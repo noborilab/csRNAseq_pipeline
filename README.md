@@ -77,6 +77,16 @@ Path to the pre-built genome index for the selected aligner. If the index does n
 
 HOMER genome name (e.g. `hg38`, `mm10`, `tair10`). Must match a genome configured in your HOMER installation, **or** a file path for a FASTA of your custom genome.
 
+### `filtering / tss_min_cpm` and `filtering / tss_min_samples`
+
+Signal-based filter applied after quantification and before TMM normalization. A TSS is kept in `tss.final.bed` only if its CPM (counts per million library-size reads, without TMM) is ≥ `tss_min_cpm` in at least `tss_min_samples` csRNA samples. Defaults are `tss_min_cpm: 0` and `tss_min_samples: 1`, which keep all TSSs. Example to require ≥ 1 CPM in ≥ 2 samples:
+
+```yaml
+filtering:
+  tss_min_cpm: 1
+  tss_min_samples: 2
+```
+
 ## Workflow Steps
 
 | Rule | Description |
@@ -91,9 +101,11 @@ HOMER genome name (e.g. `hg38`, `mm10`, `tair10`). Must match a genome configure
 | `merge_initial_tss` | Strand-aware merge of all per-sample TSS BEDs. Chromosomes not in `chrom_sizes` are excluded. |
 | `quantify_initial_{cs,in}_tss` | HOMER `annotatePeaks.pl` quantification of merged TSS sets in all libraries. |
 | `qc_initial_tss` | Calculate FRiP, nuclear read %, csRNA enrichment, miRNA depletion, and phosphorylation efficiency. Samples with FRiP < `min_cs_frip` or nuclear % < `min_pct_nuclear` are flagged as FAIL. |
-| `collect_consensus_tss` | Build the final consensus TSS set from csRNA samples, requiring detection in at least `tss_min_reps` replicates. TSSs narrower than 150 bp are padded; overlapping TSSs are split. TSSs overlapping miRNA / pre-tRNA loci (if `qc / mirnas` and `qc / trnas` are set) are removed. |
+| `collect_consensus_tss` | Build the consensus TSS set (`tss.consensus.bed`) from csRNA samples, requiring detection in at least `tss_min_reps` replicates. TSSs narrower than 150 bp are padded; overlapping TSSs are split. TSSs overlapping miRNA / pre-tRNA loci (if `qc / mirnas` and `qc / trnas` are set) are removed. |
 | `quantify_final_tss` | HOMER quantification of the consensus TSSs in all csRNA libraries. |
-| `normalize_tss_quantification` | TMM normalization (edgeR `TMMwsp`) of raw tag counts. |
+| `normalize_tss_quantification` | CPM filter (drop TSSs below `filtering / tss_min_cpm` in fewer than `filtering / tss_min_samples` csRNA samples), then TMM normalization (edgeR `TMMwsp`) of the retained counts. Writes the filtered set as `tss.final.bed`. Default CPM threshold is 0, which keeps all TSSs. |
+| `quantify_final_in_tss` | HOMER quantification of the filtered `tss.final.bed` in all input libraries. Used by the final QC step. |
+| `qc_final_tss` | Compute FRiP, csEnrichment, replicate correlations, and TSS detection rate on the filtered `tss.final.bed`. Writes `qc/qc_final_cs.txt` and `qc/qc_final_in.txt`. |
 | `generate_normalized_bw` | Multiply raw bedGraphs by RPM scale factors and export as bigWig. Small RNA regions can optionally be masked. |
 
 ## Output Files
@@ -102,14 +114,17 @@ All outputs land in `files / output_dir` (default: `results/`):
 
 | File | Description |
 |------|-------------|
-| `tss.final.bed` | Consensus TSS coordinates (BED6). |
-| `tss.final.raw.txt` | Raw tag counts per TSS per csRNA sample. |
+| `tss.consensus.bed` | Unfiltered consensus TSS set (before CPM filter). |
+| `tss.final.bed` | CPM-filtered consensus TSS coordinates (BED6). With default `tss_min_cpm: 0` this equals `tss.consensus.bed`. |
+| `tss.final.raw.txt` | Raw tag counts per TSS per csRNA sample (filtered set only). |
 | `tss.final.cpm.txt` | TMM-normalized CPM counts. |
 | `norm_factors.txt` | edgeR TMM normalization factors and RPM multipliers. |
 | `bw/{sample}.rpm.pos.bw` | Forward-strand RPM-normalized bigWig. |
 | `bw/{sample}.rpm.neg.bw` | Reverse-strand RPM-normalized bigWig (scores are negative). |
-| `qc/qc_cs.txt` | Per-sample QC metrics for csRNA libraries (FRiP, enrichment, etc.). |
-| `qc/qc_in.txt` | Per-sample QC metrics for input libraries. |
+| `qc/qc_cs.txt` | Per-sample QC metrics for csRNA libraries computed on the merged TSS set (FRiP, enrichment, etc.). |
+| `qc/qc_in.txt` | Per-sample QC metrics for input libraries computed on the merged TSS set. |
+| `qc/qc_final_cs.txt` | Per-sample QC metrics for csRNA libraries re-computed on `tss.final.bed`. FRiP and enrichment here reflect the filtered set used for downstream analysis. |
+| `qc/qc_final_in.txt` | Per-sample QC metrics for input libraries re-computed on `tss.final.bed`. |
 | `qc/replicate_correlation.txt` | Pairwise Spearman correlation between csRNA replicates of the same `sample_name`. Empty if no `sample_name` has ≥ 2 replicates. |
 | `qc/{sample}.trimming.txt` | bfqutils trimming summary. |
 | `qc/{sample}.aln.txt` | samtools flagstat alignment summary. |
@@ -131,6 +146,12 @@ The `qc_cs.txt` / `qc_in.txt` tables contain:
 | `miRNADepletion` | Ratio of miRNA depletion in csRNA vs input — an independent phosphorylation efficiency metric (requires `qc / mirnas`). |
 | `StrandBalance` | Fraction of mapped reads on the + strand. Expect ~0.5 in csRNA libraries; large deviations flag adapter contamination, library-prep strand bias, or pile-ups at a few highly expressed loci. Looser bounds in input libraries since small-RNA biology is genuinely strand-skewed. |
 | `TSSDetected` | Fraction of merged-set TSSs with ≥ 1 tag in this library. Low values flag undersequenced libraries. |
+| `FinalFRiP` | (`qc_final_*` only) FRiP recomputed on `tss.final.bed`. |
+| `FinalEnrichment` | (`qc_final_cs.txt` only) csEnrichment recomputed on `tss.final.bed`. |
+| `FinalTSSDetected` | (`qc_final_*` only) Fraction of `tss.final.bed` TSSs with ≥ 1 tag in this library. |
+| `NConsensusTSS` | (`qc_final_*` only) Number of TSSs in `tss.consensus.bed` (before CPM filter). |
+| `NFinalTSS` | (`qc_final_*` only) Number of TSSs retained in `tss.final.bed` after CPM filter. |
+| `NFilteredTSS` | (`qc_final_*` only) Number of TSSs dropped by the CPM filter. |
 | `MinReplCorrSpearman` | Minimum Spearman correlation between this sample's TSS counts and any other csRNA replicate of the same `sample_name`. `NA` when only one replicate exists. Sharp drops (e.g. < 0.9) flag sample swaps or replicate dropouts. csRNA samples only. |
 | `MinReplCorrPearson` | Same as above but Pearson correlation on log1p-transformed counts. |
 | `Status` | `Ok` or `FAIL` based on `min_cs_frip` and `min_pct_nuclear` thresholds. |
