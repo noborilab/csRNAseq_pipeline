@@ -166,6 +166,18 @@ program:
   keep_bam: False
   bwa_aln:
     keep_sai: False
+  # genomeSAindexNbases must be ≤ log2(GenomeLen)/2-1; for the 80 kb test
+  # genome that is floor(log2(80000)/2-1) = 7 (production default is 14).
+  star:
+    read_files_command: "gzip -dc"
+    align_ends_type: "EndToEnd"
+    align_intron_max: 1
+    out_filter_multimap_nmax: 1000
+    genome_sa_index_nbases: 7
+  bowtie2:
+    extra_params: "--very-sensitive"
+  hisat2:
+    extra_params: "--very-sensitive"
   homer:
     genome: "tests/data/genome.fa"
     tagdir:

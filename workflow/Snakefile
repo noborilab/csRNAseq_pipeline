@@ -380,19 +380,24 @@ def build_aln_cmd(i, o, l_flagstat, l_aln, t):
         aet = config["program"]["star"]["align_ends_type"]
         aim = config["program"]["star"]["align_intron_max"]
         ofmn = config["program"]["star"]["out_filter_multimap_nmax"]
-        cmd_aln = f"STAR --genomeDir {index} --readFilesIn {i} "
+        # Derive the STAR output prefix at shell runtime so that the Snakemake
+        # placeholder {output.bam} is not corrupted by Python's Path.with_suffix().
+        # bfqutils appends a trailing space to every read ID line; STAR 2.7.x
+        # rejects FASTQ files where the ID line does not start with '@' after
+        # stripping whitespace.  Piping through sed inside a process
+        # substitution strips that space before STAR sees the reads.
+        cmd_aln  = f"_sp=$(dirname {o})/$(basename {o} .sort.bam).;"
+        cmd_aln += f"STAR --genomeDir {index} "
+        cmd_aln += f"--readFilesIn <({readcmd} {i} | sed 's/[[:space:]]*$//') "
         cmd_aln += f"--outFilterMultimapNmax {ofmn} "
         cmd_aln += f"--outFilterMatchNmin {minlen} "
         cmd_aln += f"--alignEndsType {aet} --alignIntronMax {aim} "
-        cmd_aln += f"--runThreadN {t} --readFilesCommand {readcmd} "
+        cmd_aln += f"--runThreadN {t} "
         cmd_aln += f"--outSAMtype BAM Unsorted "
-        base = str(Path(os.path.basename(o)).with_suffix("").with_suffix(""))
-        prefix = os.path.dirname(o) + "/" + base + "."
-        cmd_aln += f"--outFileNamePrefix {prefix} > {l_aln} 2>&1; "
-        unsrt = prefix + "Aligned.out.bam"
-        cmd_filt += f"{unsrt} | samtools sort -T {o}.tmp --verbosity 0 -@ $(({t}-2)) -o {o}; "
+        cmd_aln += f'--outFileNamePrefix $_sp > {l_aln} 2>&1; '
+        cmd_filt += f'$_sp"Aligned.out.bam" | samtools sort -T {o}.tmp --verbosity 0 -@ $(({t}-2)) -o {o}; '
         cmd_post += (
-            f"; rm -f {unsrt} {prefix}Log.out {prefix}Log.final.out {prefix}SJ.out.tab"
+            f'; rm -f $_sp"Aligned.out.bam" $_sp"Log.out" $_sp"Log.final.out" $_sp"SJ.out.tab"'
         )
     elif aln == "bowtie2":
         bt2_ext = config["program"]["bowtie2"]["extra_params"]

@@ -4,7 +4,7 @@ Generate a complete test config YAML with runtime paths substituted.
 
 Usage:
     python tests/scripts/make_test_config.py <output_dir> <intermediate_dir> <genome_index> \
-        [--min-cpm N] [--min-samples N]
+        [--min-cpm N] [--min-samples N] [--alignment-program PROG]
 
 Prints the path to a temp YAML file (which the caller is responsible for removing).
 """
@@ -24,6 +24,9 @@ def main():
     p.add_argument("genome_index")
     p.add_argument("--min-cpm",     type=float, default=None)
     p.add_argument("--min-samples", type=int,   default=None)
+    p.add_argument("--alignment-program",
+                   choices=["bwa-aln", "bwa-mem", "STAR", "bowtie2", "hisat2"],
+                   default=None)
     args = p.parse_args()
 
     with open(os.path.join(REPO, "tests", "data", "config.yaml")) as fh:
@@ -53,6 +56,12 @@ def main():
         cfg["filtering"]["tss_min_cpm"] = args.min_cpm
     if args.min_samples is not None:
         cfg["filtering"]["tss_min_samples"] = args.min_samples
+    if args.alignment_program is not None:
+        cfg["program"]["alignment_program"] = args.alignment_program
+        # STAR's SA pre-indexing string must satisfy genomeSAindexNbases ≤ log2(L)/2-1.
+        # For the 80 kb synthetic genome: log2(80000)/2 - 1 ≈ 7.1 → use 7.
+        if args.alignment_program == "STAR":
+            cfg["program"].setdefault("star", {})["genome_sa_index_nbases"] = 7
 
     # Fix relative fixture paths to be relative to repo root (already correct
     # since run_tests.sh cds to repo root before running snakemake)

@@ -180,6 +180,34 @@ run_e2e() {
     python tests/e2e/assertions.py "$tmp2" --filter-pass
 }
 
+# ── per-aligner e2e ───────────────────────────────────────────────────────────
+# run_aligner_e2e PROG
+# Runs a full pipeline end-to-end with a non-default alignment program and
+# asserts all outputs are present (same checks as the default e2e run).
+run_aligner_e2e() {
+    local aln="$1"
+    echo "--- e2e: $aln ---"
+    local tmp cfg index_path
+    tmp=$(mktemp -d)
+
+    # STAR needs a directory path; other aligners use a file prefix.
+    if [[ "$aln" == "STAR" ]]; then
+        index_path="$tmp/index_star"
+    else
+        index_path="$tmp/index/genome"
+    fi
+
+    cfg=$(make_cfg "$tmp" "$tmp" "$index_path" --alignment-program "$aln")
+    trap "rm -rf $tmp $cfg" EXIT
+
+    snakemake \
+        --cores 4 \
+        -s workflow/Snakefile \
+        --configfile "$cfg" \
+        2>&1
+    python tests/e2e/assertions.py "$tmp"
+}
+
 # ── dispatch ──────────────────────────────────────────────────────────────────
 case "$CMD" in
     schema)
@@ -194,11 +222,19 @@ case "$CMD" in
     e2e)
         run_step "e2e" run_e2e
         ;;
+    star)
+        run_step "e2e/STAR" run_aligner_e2e "STAR"
+        ;;
+    bowtie2)
+        run_step "e2e/bowtie2" run_aligner_e2e "bowtie2"
+        ;;
     all)
-        run_step "schema"   run_schema
-        run_step "validate" run_validate
+        run_step "schema"      run_schema
+        run_step "validate"    run_validate
         run_unit
-        run_step "e2e"      run_e2e
+        run_step "e2e"         run_e2e
+        run_step "e2e/STAR"    run_aligner_e2e "STAR"
+        run_step "e2e/bowtie2" run_aligner_e2e "bowtie2"
         ;;
     *)
         echo "Usage: $0 [schema|validate|unit|e2e|all] [-k]" >&2
