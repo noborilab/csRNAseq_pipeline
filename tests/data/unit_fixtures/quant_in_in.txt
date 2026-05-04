@@ -1,0 +1,6 @@
+PeakID	Chr	Start	End	Strand	Annotation	condA_input1 Tag Count (1 of 2)	condA_input2 Tag Count (2 of 2)
+INTSS_1	testchr1	1050	1200	+	NA	30	25
+INTSS_2	testchr1	3100	3250	-	NA	15	12
+INTSS_3	testchr1	5100	5250	+	NA	20	18
+INTSS_4	testchr1	7100	7250	-	NA	10	8
+INTSS_5	testchr1	20000	20150	+	NA	5	6

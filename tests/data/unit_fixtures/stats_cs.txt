@@ -1,0 +1,4 @@
+Sample	TotalReads	OrganelleReads	Freq1A	PosReads	NegReads
+condA_csrna1	500	0	0.8	400	100
+condA_csrna2	480	0	0.75	360	120
+condB_csrna1	520	0	0.82	426	94

@@ -1,0 +1,6 @@
+sample_name	sample_type	replicate	read_r1	input_name
+condA	csrna	1	tests/data/reads/condA_csrna1.r1.fq.gz	
+condA	csrna	2	tests/data/reads/condA_csrna2.r1.fq.gz	
+condA	input	1	tests/data/reads/condA_input1.r1.fq.gz	
+condA	input	2	tests/data/reads/condA_input2.r1.fq.gz	
+condB	csrna	1	tests/data/reads/condB_csrna1.r1.fq.gz	condA

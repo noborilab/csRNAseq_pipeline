@@ -1,0 +1,6 @@
+testchr1	1000	1150	TSS_1	0	+
+testchr1	2000	2200	TSS_2	0	+
+testchr1	3000	3150	TSS_3	0	-
+testchr1	4000	4200	TSS_4	0	+
+testchr1	5000	5200	TSS_5	0	+
+testchr1	6000	6150	TSS_6	0	+

@@ -34,6 +34,19 @@ snakemake --cores 6 --configfile config/config.yaml -n
 
 ```
 
+## Testing
+
+A test suite using a small synthetic genome and synthetic FASTQs lives in `tests/`. It covers schema validation, Snakemake DAG correctness, R-script unit tests, and a full end-to-end run. All committed test data is under 500 KB.
+
+```bash
+# Run from the repo root (inside Singularity container or with all tools on PATH)
+./tests/run_tests.sh all         # all layers
+./tests/run_tests.sh schema      # schema validation only (fastest; no biology tools needed)
+./tests/run_tests.sh unit        # R-script unit tests
+```
+
+See `tests/README.md` for detailed instructions and how to regenerate fixtures.
+
 ## Required config entries
 
 ### `sample_table`

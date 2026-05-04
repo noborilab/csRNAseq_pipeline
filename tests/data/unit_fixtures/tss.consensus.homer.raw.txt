@@ -1,0 +1,11 @@
+PeakID	Chr	Start	End	Strand	Annotation	condA_csrna1 Tag Count (1 of 3)	condA_csrna2 Tag Count (2 of 3)	condB_csrna1 Tag Count (3 of 3)
+TSS_1	testchr1	1000	1150	+	NA	100	90	80
+TSS_2	testchr1	2000	2200	+	NA	50	40	30
+TSS_3	testchr1	3000	3150	-	NA	5	0	0
+TSS_4	testchr1	4000	4200	+	NA	0	0	5
+TSS_5	testchr1	5000	5200	+	NA	10	8	0
+TSS_6	testchr1	6000	6150	+	NA	3	2	1
+TSS_7	testchr1	7000	7200	-	NA	0	0	0
+TSS_8	testchr1	8000	8150	+	NA	0	3	0
+TSS_9	testchr1	9000	9200	+	NA	1	1	1
+TSS_10	testchr1	10000	10150	+	NA	30	25	20

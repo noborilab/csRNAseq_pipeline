@@ -1,0 +1,61 @@
+"""
+Unit test for workflow/scripts/qc_final_tss.R
+
+Run via tests/run_tests.sh or directly:
+    tmp=$(mktemp -d)
+    snakemake -s tests/unit/qc_final.smk --configfile tests/data/config.yaml \
+        --config test_outdir=$tmp --cores 1
+"""
+
+configfile: "tests/data/config.yaml"
+
+FIXTURES = "tests/data/unit_fixtures"
+TEST_OUTDIR = config.get("test_outdir", "tests/unit/tmp_qc_final")
+
+
+rule all:
+    input:
+        TEST_OUTDIR + "/qc_final_cs.txt",
+        TEST_OUTDIR + "/qc_final_in.txt",
+
+
+# tss.final.raw.txt must be in the clean format written by normalize_tss_quantification.R:
+#   TSS <tab> sample1 <tab> sample2 ...
+# We generate it on the fly from the HOMER quant fixture by selecting the keep set
+# (all TSSs, since we're not testing the filter here).
+# For simplicity we reuse the consensus HOMER quant but expose it via a Snakemake
+# rule that converts it to the clean format.
+
+rule make_clean_quant:
+    input:
+        homer=FIXTURES + "/tss.consensus.homer.raw.txt",
+    output:
+        clean=TEST_OUTDIR + "/tss.final.raw.txt",
+    run:
+        import pandas as pd
+        df = pd.read_csv(input.homer, sep="\t")
+        tag_cols = [c for c in df.columns if " Tag Count" in c]
+        counts = df[tag_cols].copy()
+        counts.columns = [
+            c.split(" Tag Count")[0].rsplit("/", 1)[-1] for c in counts.columns
+        ]
+        counts.insert(0, "TSS", df.iloc[:, 0])
+        counts.to_csv(output.clean, sep="\t", index=False)
+
+
+rule test_qc_final_tss:
+    input:
+        quant_cs=TEST_OUTDIR + "/tss.final.raw.txt",
+        quant_in=FIXTURES + "/tss.final.in.raw.txt",
+        tss_final=FIXTURES + "/tss.consensus.bed",      # use as proxy for tss.final.bed
+        tss_consensus=FIXTURES + "/tss.consensus.bed",
+        stats_cs=FIXTURES + "/stats_cs.txt",
+        stats_in=FIXTURES + "/stats_in.txt",
+    output:
+        qc_cs=TEST_OUTDIR + "/qc_final_cs.txt",
+        qc_in=TEST_OUTDIR + "/qc_final_in.txt",
+    params:
+        cs_ids="condA_csrna1 condA_csrna2 condB_csrna1",
+        paired_in_ids="condA_input1 condA_input2 condA_input1",
+    script:
+        "../../workflow/scripts/qc_final_tss.R"

@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""
+End-to-end assertions for the csRNA-seq pipeline test run.
+
+Usage:
+    python tests/e2e/assertions.py <output_dir> [--filter-pass]
+
+Arguments:
+    output_dir    The pipeline output directory (files.output_dir).
+    --filter-pass If set, asserts that tss.final.bed has FEWER rows than
+                  tss.consensus.bed (i.e. the CPM filter actually removed TSSs).
+                  Without this flag, asserts they are equal (default no-op filter).
+"""
+
+import os
+import sys
+import argparse
+
+
+def fail(msg: str) -> None:
+    print(f"FAIL: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def ok(msg: str) -> None:
+    print(f"  ok  {msg}")
+
+
+def count_lines(path: str, skip_header: bool = False) -> int:
+    with open(path) as fh:
+        n = sum(1 for line in fh if line.strip())
+    return n - (1 if skip_header else 0)
+
+
+def check_exists_nonempty(path: str, label: str) -> None:
+    if not os.path.exists(path):
+        fail(f"{label} not found: {path}")
+    if os.path.getsize(path) == 0:
+        fail(f"{label} is empty: {path}")
+    ok(f"{label} exists and is non-empty")
+
+
+def check_file_nonempty(outdir: str, rel: str) -> None:
+    check_exists_nonempty(os.path.join(outdir, rel), rel)
+
+
+def main(outdir: str, filter_pass: bool) -> None:
+    print(f"Checking outputs in: {outdir}")
+
+    # Expected csRNA samples
+    cs_samples = ["condA_csrna1", "condA_csrna2", "condB_csrna1"]
+    # Expected QC rows: 3 csRNA samples, 2 input samples
+    n_cs = 3
+    n_in = 2
+
+    # Core outputs
+    for f in [
+        "tss.consensus.bed",
+        "tss.final.bed",
+        "tss.final.raw.txt",
+        "tss.final.cpm.txt",
+        "norm_factors.txt",
+        "tss.final.in.raw.txt",
+    ]:
+        check_file_nonempty(outdir, f)
+
+    # QC outputs
+    for f in [
+        "qc/qc_cs.txt",
+        "qc/qc_in.txt",
+        "qc/replicate_correlation.txt",
+        "qc/qc_final_cs.txt",
+        "qc/qc_final_in.txt",
+        "qc/stats_cs.txt",
+        "qc/stats_in.txt",
+    ]:
+        check_file_nonempty(outdir, f)
+
+    # bigWigs for every csRNA sample
+    for s in cs_samples:
+        for strand in ("pos", "neg"):
+            check_file_nonempty(outdir, f"bw/{s}.rpm.{strand}.bw")
+
+    # QC tables have the right number of data rows
+    for fname, expected_n, label in [
+        ("qc/qc_cs.txt",       n_cs, "qc_cs"),
+        ("qc/qc_in.txt",       n_in, "qc_in"),
+        ("qc/qc_final_cs.txt", n_cs, "qc_final_cs"),
+        ("qc/qc_final_in.txt", n_in, "qc_final_in"),
+        ("qc/stats_cs.txt",    n_cs, "stats_cs"),
+        ("qc/stats_in.txt",    n_in, "stats_in"),
+    ]:
+        actual = count_lines(os.path.join(outdir, fname), skip_header=True)
+        if actual != expected_n:
+            fail(f"{label} has {actual} data rows, expected {expected_n}")
+        ok(f"{label} has {expected_n} rows")
+
+    # qc_final_cs.txt must have FinalFRiP and NFilteredTSS columns
+    import csv
+    with open(os.path.join(outdir, "qc/qc_final_cs.txt")) as fh:
+        reader = csv.DictReader(fh, delimiter="\t")
+        header = reader.fieldnames or []
+    for col in ("FinalFRiP", "FinalEnrichment", "NConsensusTSS", "NFinalTSS", "NFilteredTSS"):
+        if col not in header:
+            fail(f"qc_final_cs.txt missing column: {col}")
+    ok("qc_final_cs.txt has required columns")
+
+    # NFilteredTSS == NConsensusTSS - NFinalTSS (spot-check first row)
+    with open(os.path.join(outdir, "qc/qc_final_cs.txt")) as fh:
+        row = next(csv.DictReader(fh, delimiter="\t"))
+    nc = int(float(row["NConsensusTSS"]))
+    nf = int(float(row["NFinalTSS"]))
+    nfilt = int(float(row["NFilteredTSS"]))
+    if nfilt != nc - nf:
+        fail(f"NFilteredTSS={nfilt} != NConsensusTSS({nc}) - NFinalTSS({nf})")
+    ok("NFilteredTSS == NConsensusTSS - NFinalTSS")
+
+    # norm_factors.txt: one row per csRNA sample, norm.factors finite
+    with open(os.path.join(outdir, "norm_factors.txt")) as fh:
+        nf_rows = list(csv.DictReader(fh, delimiter="\t"))
+    if len(nf_rows) != n_cs:
+        fail(f"norm_factors.txt has {len(nf_rows)} rows, expected {n_cs}")
+    for r in nf_rows:
+        val = float(r.get("norm.factors", "nan"))
+        if not (0 < val < 1e6):
+            fail(f"norm.factors out of range for sample {r}: {val}")
+    ok("norm_factors.txt has one row per csRNA sample with finite factors")
+
+    # CPM sanity: tss.final.cpm.txt non-header rows, each sample column should
+    # sum to approximately 1e6 (CPM property). Allow 10% tolerance.
+    with open(os.path.join(outdir, "tss.final.cpm.txt")) as fh:
+        cpm_rows = list(csv.DictReader(fh, delimiter="\t"))
+    for sid in cs_samples:
+        if sid not in (cpm_rows[0] if cpm_rows else {}):
+            continue  # sample not in cpm table (may happen with 0-read outcome)
+        total = sum(float(r[sid]) for r in cpm_rows)
+        if total < 0.5e6 or total > 1.5e6:
+            fail(f"tss.final.cpm.txt column {sid} sums to {total:.0f}, expected ~1e6")
+    ok("tss.final.cpm.txt per-sample sums are ~1e6")
+
+    # TSS filter assertion
+    n_consensus = count_lines(os.path.join(outdir, "tss.consensus.bed"))
+    n_final     = count_lines(os.path.join(outdir, "tss.final.bed"))
+    if filter_pass:
+        if n_final >= n_consensus:
+            fail(f"CPM filter had no effect: tss.final.bed ({n_final}) >= tss.consensus.bed ({n_consensus})")
+        ok(f"CPM filter removed {n_consensus - n_final} TSSs ({n_final} of {n_consensus} retained)")
+    else:
+        if n_final != n_consensus:
+            fail(f"Default params: tss.final.bed ({n_final}) != tss.consensus.bed ({n_consensus}); "
+                 "expected no-op filter")
+        ok(f"Default filter is no-op: {n_final} TSSs in both consensus and final")
+
+    print("\nAll assertions passed.")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("outdir")
+    parser.add_argument("--filter-pass", action="store_true")
+    args = parser.parse_args()
+    main(args.outdir, args.filter_pass)

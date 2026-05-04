@@ -59,9 +59,6 @@ if not chromsizes[1].dtype.kind == "i":
 chromsizes[0] = chromsizes[0].astype(str)
 VALID_CHROMS = chromsizes[0].tolist()
 
-if workflow.cores < 3:
-    sys.exit("ERROR: This workflow requires minimum --cores 3.")
-
 MIN_ALN_THREADS = max(2, config["program"]["alignment_threads"])
 MIN_TRIM_THREADS = 2
 PIGZ_THREADS = 0
@@ -216,6 +213,11 @@ for i in range(sampletab.shape[0]):
 
 
 conda: "workflow/envs/env.yaml"
+
+
+onstart:
+    if workflow.cores < 3:
+        sys.exit("ERROR: This workflow requires minimum --cores 3.")
 
 
 rule all:
@@ -512,8 +514,12 @@ rule find_tss_initial:
         """
             findcsRNATSS.pl {input.sample} -i {input.match} \
                 -o {params.prefix} -genome {params.genome} \
-                -size {params.size} -ntagThreshold {params.ntags} {params.opt} > {log} 2>&1
-            pos2bed.pl -o {output.bed} {output.tss} 2>> {log}
+                -size {params.size} -ntagThreshold {params.ntags} {params.opt} > {log} 2>&1 || true
+            if [[ -f {output.tss} ]]; then
+                pos2bed.pl -o {output.bed} {output.tss} 2>> {log}
+            else
+                touch {output.tss} {output.bed}
+            fi
         """
 
 

@@ -1,0 +1,52 @@
+### Test configuration for the csRNA-seq pipeline
+# output_dir and intermediate_dir are overridden at runtime by run_tests.sh
+
+sample_table: "tests/data/samples.tsv"
+
+chrom_sizes: "tests/data/chrom.sizes"
+
+genome_fasta: "tests/data/genome.fa"
+
+program:
+  # genome_index is overridden at runtime by run_tests.sh (points to tmpdir)
+  genome_index: "PLACEHOLDER_SET_BY_RUNNER"
+  bfqutils:
+    sequencing_adapter: "AGATCGGAAGAGCACACGTCTGAACTCCAGTCA"
+    use_pigz: False
+  alignment_threads: 1
+  alignment_program: "bwa-aln"
+  keep_trimmed_fastq: False
+  keep_bam: False
+  bwa_aln:
+    keep_sai: False
+  homer:
+    genome: "tests/data/genome.fa"
+    tagdir:
+      extra_args: "-checkGC"
+    tss:
+      size: 100
+      ntagthreshold: 3
+      extra_args: ""
+
+filtering:
+  alignment_mapq: 0
+  include_flags: 0
+  exclude_flags: 2308
+  max_read_length: 70
+  min_alignment_length: 15
+  max_mismatch: 999
+  tss_min_reps: 1
+  tss_min_cpm: 0
+  tss_min_samples: 1
+  mask_srnas_from_bw: False
+
+files:
+  output_dir: "PLACEHOLDER_SET_BY_RUNNER"
+  intermediate_dir: "PLACEHOLDER_SET_BY_RUNNER"
+
+qc:
+  organelle_chroms: []
+  mirnas: "tests/data/mirnas.bed"
+  trnas: "tests/data/trnas.bed"
+  min_cs_frip: 0.0
+  min_pct_nuclear: 0.0

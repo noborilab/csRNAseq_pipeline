@@ -1,0 +1,3 @@
+Sample	TotalReads	OrganelleReads	Freq1A	PosReads	NegReads
+condA_input1	450	0	0.5	225	225
+condA_input2	460	0	0.45	207	253
