@@ -10,7 +10,11 @@
 #   validate  Snakemake --lint and -n dry-run (fast)
 #   unit      R-script unit tests via mini Snakefiles (requires R + edgeR + rtracklayer)
 #   e2e       Full end-to-end pipeline run (requires all pipeline tools)
-#   all       Run all four in order, cheapest first (default)
+#   star      End-to-end with STAR alignment
+#   bowtie2   End-to-end with bowtie2 alignment
+#   bwa-mem   End-to-end with bwa-mem alignment
+#   hisat2    End-to-end with hisat2 alignment
+#   all       Run all in order, cheapest first (default)
 #
 # Options:
 #   -k        Keep going on failure (default: stop at first failure)
@@ -228,6 +232,12 @@ case "$CMD" in
     bowtie2)
         run_step "e2e/bowtie2" run_aligner_e2e "bowtie2"
         ;;
+    bwa-mem)
+        run_step "e2e/bwa-mem" run_aligner_e2e "bwa-mem"
+        ;;
+    hisat2)
+        run_step "e2e/hisat2" run_aligner_e2e "hisat2"
+        ;;
     all)
         run_step "schema"      run_schema
         run_step "validate"    run_validate
@@ -235,9 +245,11 @@ case "$CMD" in
         run_step "e2e"         run_e2e
         run_step "e2e/STAR"    run_aligner_e2e "STAR"
         run_step "e2e/bowtie2" run_aligner_e2e "bowtie2"
+        run_step "e2e/bwa-mem" run_aligner_e2e "bwa-mem"
+        run_step "e2e/hisat2"  run_aligner_e2e "hisat2"
         ;;
     *)
-        echo "Usage: $0 [schema|validate|unit|e2e|all] [-k]" >&2
+        echo "Usage: $0 [schema|validate|unit|e2e|star|bowtie2|bwa-mem|hisat2|all] [-k]" >&2
         exit 1
         ;;
 esac

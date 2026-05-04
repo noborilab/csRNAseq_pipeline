@@ -19,6 +19,10 @@ program:
   keep_bam: False
   bwa_aln:
     keep_sai: False
+  bwa_mem:
+    w: 0
+    L: 999
+    O: 999
   # genomeSAindexNbases must be ≤ log2(GenomeLen)/2-1; for the 80 kb test
   # genome that is floor(log2(80000)/2-1) = 7 (production default is 14).
   star:
