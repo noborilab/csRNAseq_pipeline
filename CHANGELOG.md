@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- End-to-end tests for bwa-mem and hisat2 alignment programs, runnable via
+  `./tests/run_tests.sh bwa-mem` and `./tests/run_tests.sh hisat2`; both
+  are included in the `all` subcommand.
+
 ## [0.1.0] - 2026-05-04
 
 ### Added
