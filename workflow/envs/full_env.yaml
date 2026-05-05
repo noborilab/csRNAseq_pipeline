@@ -1,0 +1,48 @@
+name: csRNAseq_dev
+# Channel priority: conda-forge must come before bioconda so that
+# conda-forge base packages (compilers, libstdc++) take precedence.
+channels:
+  - conda-forge
+  - bioconda
+
+dependencies:
+  # ── Workflow engine ─────────────────────────────────────────────────────────
+  # Full snakemake (not -minimal) for --lint, reporting, and other dev features
+  - snakemake >=9.13.3
+  - pandas >=1.5
+  - pyyaml                          # used directly by tests/scripts/make_test_config.py
+
+  # ── Alignment & read processing ─────────────────────────────────────────────
+  # bwa covers both bwa-aln and bwa-mem modes
+  - bwa >=0.7.17
+  - star >=2.7                      # e2e/STAR test
+  - bowtie2 >=2.4                   # e2e/bowtie2 test
+  - hisat2 >=2.2                    # e2e/hisat2 test
+  - samtools >=1.17
+  - bedtools >=2.30
+  # Optional: parallel gzip — only needed when use_pigz: True in config
+  - pigz
+
+  # ── TSS detection & quantification (HOMER) ──────────────────────────────────
+  # Available on Linux via bioconda. macOS users must install HOMER manually:
+  #   http://homer.ucsd.edu/homer/introduction/install.html
+  - homer >=4.11
+
+  # ── R and Bioconductor packages ─────────────────────────────────────────────
+  - r-base >=4.4
+  - bioconductor-edger >=4.0        # TMM normalisation
+  - bioconductor-rtracklayer >=1.60 # BED / bedGraph / bigWig I/O
+  - bioconductor-genomicranges      # pulled in by rtracklayer; listed explicitly
+  - bioconductor-iranges            # pulled in by GenomicRanges; listed explicitly
+  - r-readr >=2.0                   # fast TSV reading
+
+  # ── Test suite ──────────────────────────────────────────────────────────────
+  - pytest >=7.0                    # schema tests (tests/schema/test_schemas.py)
+
+  # ── Development tools ───────────────────────────────────────────────────────
+  - snakefmt >=0.8                  # Snakemake file formatter / linter
+  - vim
+
+  # ── Not available via conda ─────────────────────────────────────────────────
+  # bfqutils (adapter trimming) must be installed manually:
+  #   https://github.com/bjmt/bfqutils
