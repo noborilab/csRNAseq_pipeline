@@ -18,6 +18,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `workflow/envs/full_env.yaml` for development and running the full test
   suite; adds STAR, bowtie2, hisat2, pytest, snakefmt, and vim on top of
   the minimal spec.
+- `qc_final_cs.txt` and `qc_final_in.txt` now contain the full set of QC
+  metrics (csRiP, sRiP, csFRiP, sFRiP, csRNACappedPct, csEnrichment,
+  sDepletion, PretRNA, PretRNAPct, PhosEfficiency, miRNA, miRNADepletion)
+  re-derived from raw quantification files rather than copied from the
+  initial QC step, so they reflect the CPM-filtered TSS set.
+- `qc/replicate_correlation.txt` now contains pairwise correlations
+  computed on both the initial merged TSS set (Stage=Initial) and the
+  filtered final TSS set (Stage=Final), enabling comparison across filter
+  stringencies.
+
+### Changed
+- `qc/qc_cs.txt` → `qc/qc_initial_cs.txt` and `qc/qc_in.txt` →
+  `qc/qc_initial_in.txt` to make explicit that these metrics are computed
+  on the initial (pre-filter) merged TSS set.
+- `qc/stats_cs.txt` → `qc/stats_initial_cs.txt` and `qc/stats_in.txt` →
+  `qc/stats_initial_in.txt` for the same reason.
 
 ### Fixed
 - Sample sheet validation no longer fails when an optional column

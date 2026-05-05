@@ -125,56 +125,68 @@ def assert_collect_consensus(outdir: str) -> None:
 
 
 def assert_qc_initial(outdir: str) -> None:
-    qc_cs_path = os.path.join(outdir, "qc_cs.txt")
-    qc_in_path = os.path.join(outdir, "qc_in.txt")
+    qc_cs_path = os.path.join(outdir, "qc_initial_cs.txt")
+    qc_in_path = os.path.join(outdir, "qc_initial_in.txt")
     cor_path   = os.path.join(outdir, "replicate_correlation.txt")
     for p in (qc_cs_path, qc_in_path, cor_path):
         if not os.path.exists(p):
             fail(f"Missing output: {p}")
 
-    # 3 csRNA samples in qc_cs.txt
+    # 3 csRNA samples in qc_initial_cs.txt
     n_cs = count_lines(qc_cs_path, skip_header=True)
     if n_cs != 3:
-        fail(f"qc_cs.txt has {n_cs} rows, expected 3")
-    ok("qc_cs.txt has 3 csRNA rows")
+        fail(f"qc_initial_cs.txt has {n_cs} rows, expected 3")
+    ok("qc_initial_cs.txt has 3 csRNA rows")
 
-    # 2 input samples in qc_in.txt
+    # 2 input samples in qc_initial_in.txt
     n_in = count_lines(qc_in_path, skip_header=True)
     if n_in != 2:
-        fail(f"qc_in.txt has {n_in} rows, expected 2")
-    ok("qc_in.txt has 2 input rows")
+        fail(f"qc_initial_in.txt has {n_in} rows, expected 2")
+    ok("qc_initial_in.txt has 2 input rows")
 
-    # Required columns present in qc_cs.txt
+    # Required columns present in qc_initial_cs.txt
     with open(qc_cs_path) as fh:
         hdr = fh.readline().strip().split("\t")
     for col in ("csFRiP", "csEnrichment", "TSSDetected"):
         if col not in hdr:
-            fail(f"qc_cs.txt missing column: {col}")
-    ok("qc_cs.txt has expected columns")
+            fail(f"qc_initial_cs.txt missing column: {col}")
+    ok("qc_initial_cs.txt has expected columns")
 
-    # Verify shared-input pairing: condB_csrna1 should appear in qc_cs.txt
+    # Verify shared-input pairing: condB_csrna1 should appear in qc_initial_cs.txt
     with open(qc_cs_path) as fh:
         rows = list(csv.DictReader(fh, delimiter="\t"))
     samples = [r["Sample"] for r in rows]
     if "condB_csrna1" not in samples:
-        fail("condB_csrna1 not found in qc_cs.txt — shared-input pairing may be broken")
-    ok("condB_csrna1 present in qc_cs.txt (shared-input pairing works)")
+        fail("condB_csrna1 not found in qc_initial_cs.txt — shared-input pairing may be broken")
+    ok("condB_csrna1 present in qc_initial_cs.txt (shared-input pairing works)")
 
 
 def assert_qc_final(outdir: str) -> None:
     qc_cs_path = os.path.join(outdir, "qc_final_cs.txt")
     qc_in_path = os.path.join(outdir, "qc_final_in.txt")
-    for p in (qc_cs_path, qc_in_path):
+    cor_path   = os.path.join(outdir, "replicate_correlation.txt")
+    for p in (qc_cs_path, qc_in_path, cor_path):
         if not os.path.exists(p):
             fail(f"Missing output: {p}")
 
     # Required columns
     with open(qc_cs_path) as fh:
         hdr = fh.readline().strip().split("\t")
-    for col in ("FinalFRiP", "FinalEnrichment", "NConsensusTSS", "NFinalTSS", "NFilteredTSS"):
+    for col in (
+        "FinalFRiP", "FinalEnrichment", "NConsensusTSS", "NFinalTSS", "NFilteredTSS",
+        "csRiP", "sRiP", "csFRiP", "sFRiP", "csRNACappedPct", "csEnrichment", "sDepletion",
+    ):
         if col not in hdr:
             fail(f"qc_final_cs.txt missing column: {col}")
     ok("qc_final_cs.txt has required columns")
+
+    # replicate_correlation.txt must have both Stage values
+    with open(cor_path) as fh:
+        cor_rows = list(csv.DictReader(fh, delimiter="\t"))
+    stages = {r["Stage"] for r in cor_rows}
+    if "Initial" not in stages or "Final" not in stages:
+        fail(f"replicate_correlation.txt missing Stage values (got: {stages})")
+    ok("replicate_correlation.txt has both Initial and Final stages")
 
     # NFilteredTSS == NConsensusTSS - NFinalTSS for each row
     with open(qc_cs_path) as fh:

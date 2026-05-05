@@ -146,18 +146,20 @@ All outputs land in `files / output_dir` (default: `results/`):
 | `norm_factors.txt` | edgeR TMM normalization factors and RPM multipliers. |
 | `bw/{sample}.rpm.pos.bw` | Forward-strand RPM-normalized bigWig. |
 | `bw/{sample}.rpm.neg.bw` | Reverse-strand RPM-normalized bigWig (scores are negative). |
-| `qc/qc_cs.txt` | Per-sample QC metrics for csRNA libraries computed on the merged TSS set (FRiP, enrichment, etc.). |
-| `qc/qc_in.txt` | Per-sample QC metrics for input libraries computed on the merged TSS set. |
-| `qc/qc_final_cs.txt` | Per-sample QC metrics for csRNA libraries re-computed on `tss.final.bed`. FRiP and enrichment here reflect the filtered set used for downstream analysis. |
-| `qc/qc_final_in.txt` | Per-sample QC metrics for input libraries re-computed on `tss.final.bed`. |
-| `qc/replicate_correlation.txt` | Pairwise Spearman correlation between csRNA replicates of the same `sample_name`. Empty if no `sample_name` has ≥ 2 replicates. |
+| `qc/qc_initial_cs.txt` | Per-sample QC metrics for csRNA libraries computed on the merged initial TSS set (FRiP, enrichment, etc.). |
+| `qc/qc_initial_in.txt` | Per-sample QC metrics for input libraries computed on the merged initial TSS set. |
+| `qc/qc_final_cs.txt` | Per-sample QC metrics for csRNA libraries re-derived from the filtered `tss.final.bed`. Contains the same columns as `qc_initial_cs.txt` plus the `Final*` and `NConsensusTSS`/`NFinalTSS`/`NFilteredTSS` columns. All metrics (FRiP, enrichment, contamination) are re-computed from raw counts, not copied from the initial QC. |
+| `qc/qc_final_in.txt` | Per-sample QC metrics for input libraries, augmented with `Final*` columns. |
+| `qc/replicate_correlation.txt` | Pairwise Spearman and Pearson correlations between csRNA replicates of the same `sample_name`, for both the initial TSS set (Stage=Initial) and the filtered set (Stage=Final). Empty if no `sample_name` has ≥ 2 replicates. |
+| `qc/stats_initial_cs.txt` | Raw alignment and tag-count statistics for csRNA libraries (TotalReads, OrganelleReads, PosReads, NegReads). |
+| `qc/stats_initial_in.txt` | Raw alignment and tag-count statistics for input libraries. |
 | `qc/{sample}.trimming.txt` | bfqutils trimming summary. |
 | `qc/{sample}.aln.txt` | samtools flagstat alignment summary. |
 | `qc/{sample}.aligner.log` | Aligner stderr (bwa/STAR/bowtie2/hisat2). |
 
 ## QC Metrics
 
-The `qc_cs.txt` / `qc_in.txt` tables contain:
+The `qc_initial_cs.txt` / `qc_initial_in.txt` tables contain the columns below. `qc_final_cs.txt` / `qc_final_in.txt` contain the same columns plus the `Final*` / `NConsensusTSS` / `NFinalTSS` / `NFilteredTSS` columns, with all values re-derived from the filtered TSS set rather than copied from the initial QC:
 
 | Column | Description |
 |--------|-------------|

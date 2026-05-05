@@ -1,0 +1,2 @@
+Group	SampleA	SampleB	SpearmanCor	PearsonCor	Stage
+condA	condA_csrna1	condA_csrna2	0.9	0.95	Initial

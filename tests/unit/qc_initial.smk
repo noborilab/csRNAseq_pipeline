@@ -26,8 +26,8 @@ rule test_qc_initial_tss:
         tss_cs=FIXTURES + "/merged_cs.bed",
         tss_in=FIXTURES + "/merged_in.bed",
     output:
-        qc_cs=TEST_OUTDIR + "/qc_cs.txt",
-        qc_in=TEST_OUTDIR + "/qc_in.txt",
+        qc_cs=TEST_OUTDIR + "/qc_initial_cs.txt",
+        qc_in=TEST_OUTDIR + "/qc_initial_in.txt",
         repl_cor=TEST_OUTDIR + "/replicate_correlation.txt",
     params:
         mirnas=config.get("qc", {}).get("mirnas") or "",

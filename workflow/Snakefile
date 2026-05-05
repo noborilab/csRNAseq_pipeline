@@ -240,10 +240,10 @@ rule all:
             OUTPUT_DIR + "/bedgraph/{sample}.raw.neg.bedGraph.gz",
             sample=list(sampletab["id"]),
         ),
-        OUTPUT_DIR + "/qc/stats_cs.txt",
-        OUTPUT_DIR + "/qc/stats_in.txt",
-        OUTPUT_DIR + "/qc/qc_cs.txt",
-        OUTPUT_DIR + "/qc/qc_in.txt",
+        OUTPUT_DIR + "/qc/stats_initial_cs.txt",
+        OUTPUT_DIR + "/qc/stats_initial_in.txt",
+        OUTPUT_DIR + "/qc/qc_initial_cs.txt",
+        OUTPUT_DIR + "/qc/qc_initial_in.txt",
         OUTPUT_DIR + "/qc/qc_final_cs.txt",
         OUTPUT_DIR + "/qc/qc_final_in.txt",
         OUTPUT_DIR + "/qc/replicate_correlation.txt",
@@ -575,8 +575,8 @@ rule gather_stats:
             for s in sampletab["id"]
         ),
     output:
-        cs=OUTPUT_DIR + "/qc/stats_cs.txt",
-        inp=OUTPUT_DIR + "/qc/stats_in.txt",
+        cs=OUTPUT_DIR + "/qc/stats_initial_cs.txt",
+        inp=OUTPUT_DIR + "/qc/stats_initial_in.txt",
     benchmark:
         OUTPUT_DIR + "/qc/gather_stats.benchmark.txt",
     resources:
@@ -721,13 +721,13 @@ rule qc_initial_tss:
         quant_cs_in=INTERMEDIATE_DIR + "/tss_merged/all_cs.tss_merged_quant_in.txt",
         quant_in_cs=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged_quant_cs.txt",
         quant_in_in=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged_quant_in.txt",
-        stats_cs=OUTPUT_DIR + "/qc/stats_cs.txt",
-        stats_in=OUTPUT_DIR + "/qc/stats_in.txt",
+        stats_cs=OUTPUT_DIR + "/qc/stats_initial_cs.txt",
+        stats_in=OUTPUT_DIR + "/qc/stats_initial_in.txt",
         tss_cs=INTERMEDIATE_DIR + "/tss_merged/all_cs.tss_merged.bed",
         tss_in=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged.bed",
     output:
-        qc_cs=OUTPUT_DIR + "/qc/qc_cs.txt",
-        qc_in=OUTPUT_DIR + "/qc/qc_in.txt",
+        qc_cs=OUTPUT_DIR + "/qc/qc_initial_cs.txt",
+        qc_in=OUTPUT_DIR + "/qc/qc_initial_in.txt",
         repl_cor=INTERMEDIATE_DIR + "/qc/replicate_correlation_initial.txt",
     resources:
         mem_mb=2000,
@@ -882,12 +882,13 @@ rule qc_final_tss:
     input:
         quant_cs=OUTPUT_DIR + "/tss.final.raw.txt",
         quant_in=OUTPUT_DIR + "/tss.final.in.raw.txt",
+        quant_in_cs=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged_quant_cs.txt",
+        quant_in_in=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged_quant_in.txt",
         tss_final=OUTPUT_DIR + "/tss.final.bed",
         tss_consensus=OUTPUT_DIR + "/tss.consensus.bed",
-        stats_cs=OUTPUT_DIR + "/qc/stats_cs.txt",
-        stats_in=OUTPUT_DIR + "/qc/stats_in.txt",
-        qc_cs_initial=OUTPUT_DIR + "/qc/qc_cs.txt",
-        qc_in_initial=OUTPUT_DIR + "/qc/qc_in.txt",
+        tss_in=INTERMEDIATE_DIR + "/tss_merged/all_in.tss_merged.bed",
+        stats_cs=OUTPUT_DIR + "/qc/stats_initial_cs.txt",
+        stats_in=OUTPUT_DIR + "/qc/stats_initial_in.txt",
         repl_cor_initial=INTERMEDIATE_DIR + "/qc/replicate_correlation_initial.txt",
     output:
         qc_cs=OUTPUT_DIR + "/qc/qc_final_cs.txt",
@@ -903,5 +904,7 @@ rule qc_final_tss:
                 for cs in sampletab["id"][sampletab["sample_type"] == "csrna"]
             ]
         ),
+        mirnas=config.get("qc", {}).get("mirnas") or "",
+        trnas=config.get("qc", {}).get("trnas") or "",
     script:
         "scripts/qc_final_tss.R"

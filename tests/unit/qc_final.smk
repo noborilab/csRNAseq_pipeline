@@ -17,6 +17,7 @@ rule all:
     input:
         TEST_OUTDIR + "/qc_final_cs.txt",
         TEST_OUTDIR + "/qc_final_in.txt",
+        TEST_OUTDIR + "/replicate_correlation.txt",
 
 
 # tss.final.raw.txt must be in the clean format written by normalize_tss_quantification.R:
@@ -47,15 +48,22 @@ rule test_qc_final_tss:
     input:
         quant_cs=TEST_OUTDIR + "/tss.final.raw.txt",
         quant_in=FIXTURES + "/tss.final.in.raw.txt",
+        quant_in_cs=FIXTURES + "/quant_in_cs.txt",
+        quant_in_in=FIXTURES + "/quant_in_in.txt",
         tss_final=FIXTURES + "/tss.consensus.bed",      # use as proxy for tss.final.bed
         tss_consensus=FIXTURES + "/tss.consensus.bed",
+        tss_in=FIXTURES + "/merged_in.bed",
         stats_cs=FIXTURES + "/stats_cs.txt",
         stats_in=FIXTURES + "/stats_in.txt",
+        repl_cor_initial=FIXTURES + "/repl_cor_initial.txt",
     output:
         qc_cs=TEST_OUTDIR + "/qc_final_cs.txt",
         qc_in=TEST_OUTDIR + "/qc_final_in.txt",
+        repl_cor=TEST_OUTDIR + "/replicate_correlation.txt",
     params:
         cs_ids="condA_csrna1 condA_csrna2 condB_csrna1",
         paired_in_ids="condA_input1 condA_input2 condA_input1",
+        mirnas=config.get("qc", {}).get("mirnas") or "",
+        trnas=config.get("qc", {}).get("trnas") or "",
     script:
         "../../workflow/scripts/qc_final_tss.R"

@@ -66,13 +66,13 @@ def main(outdir: str, filter_pass: bool) -> None:
 
     # QC outputs
     for f in [
-        "qc/qc_cs.txt",
-        "qc/qc_in.txt",
+        "qc/qc_initial_cs.txt",
+        "qc/qc_initial_in.txt",
         "qc/replicate_correlation.txt",
         "qc/qc_final_cs.txt",
         "qc/qc_final_in.txt",
-        "qc/stats_cs.txt",
-        "qc/stats_in.txt",
+        "qc/stats_initial_cs.txt",
+        "qc/stats_initial_in.txt",
     ]:
         check_file_nonempty(outdir, f)
 
@@ -83,12 +83,12 @@ def main(outdir: str, filter_pass: bool) -> None:
 
     # QC tables have the right number of data rows
     for fname, expected_n, label in [
-        ("qc/qc_cs.txt",       n_cs, "qc_cs"),
-        ("qc/qc_in.txt",       n_in, "qc_in"),
-        ("qc/qc_final_cs.txt", n_cs, "qc_final_cs"),
-        ("qc/qc_final_in.txt", n_in, "qc_final_in"),
-        ("qc/stats_cs.txt",    n_cs, "stats_cs"),
-        ("qc/stats_in.txt",    n_in, "stats_in"),
+        ("qc/qc_initial_cs.txt", n_cs, "qc_initial_cs"),
+        ("qc/qc_initial_in.txt", n_in, "qc_initial_in"),
+        ("qc/qc_final_cs.txt",   n_cs, "qc_final_cs"),
+        ("qc/qc_final_in.txt",   n_in, "qc_final_in"),
+        ("qc/stats_initial_cs.txt", n_cs, "stats_initial_cs"),
+        ("qc/stats_initial_in.txt", n_in, "stats_initial_in"),
     ]:
         actual = count_lines(os.path.join(outdir, fname), skip_header=True)
         if actual != expected_n:

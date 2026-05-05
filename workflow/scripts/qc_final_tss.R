@@ -18,34 +18,71 @@ stats_cs[["NuclearReads"]]    <- with(stats_cs, TotalReads - OrganelleReads)
 stats_in[["NuclearReads"]]    <- with(stats_in, TotalReads - OrganelleReads)
 stats_in_cs[["NuclearReads"]] <- with(stats_in_cs, TotalReads - OrganelleReads)
 
-# csRNA quant on final TSS set (clean format: TSS + integer count columns)
-quant_cs <- suppressWarnings(suppressMessages(readr::read_tsv(trimws(snakemake@input[["quant_cs"]]))))
-quant_cs_m <- as.matrix(quant_cs[, -1, drop = FALSE])
+# Helper: extract tag-count matrix and strip HOMER column-name decoration.
+# Rownames are set to the first column (TSS ID) so downstream filtering by name works.
+read_homer_quant <- function(path) {
+    df  <- suppressWarnings(suppressMessages(readr::read_tsv(trimws(path))))
+    ids <- df[[1]]
+    idx <- grep(" Tag Count", colnames(df))
+    m   <- as.matrix(df[, idx, drop = FALSE])
+    colnames(m) <- basename(gsub(" Tag Count .+", "", colnames(m)))
+    rownames(m) <- ids
+    m
+}
+
+# csRNA quant on final TSS set (clean format: TSS-id + integer count columns)
+quant_cs_raw <- suppressWarnings(suppressMessages(readr::read_tsv(trimws(snakemake@input[["quant_cs"]]))))
+quant_cs_m   <- as.matrix(quant_cs_raw[, -1, drop = FALSE])
 storage.mode(quant_cs_m) <- "double"
-rownames(quant_cs_m) <- quant_cs[[1]]
+rownames(quant_cs_m) <- quant_cs_raw[[1]]
 
-# Input quant on final TSS set (HOMER annotatePeaks.pl format)
-quant_in_raw <- suppressWarnings(suppressMessages(readr::read_tsv(trimws(snakemake@input[["quant_in"]]))))
-tag_cols_in <- grep(" Tag Count", colnames(quant_in_raw))
-quant_in_m <- as.matrix(quant_in_raw[, tag_cols_in, drop = FALSE])
-colnames(quant_in_m) <- basename(gsub(" Tag Count .+", "", colnames(quant_in_m)))
+# Input quant on final TSS set (HOMER format)
+quant_in_m <- read_homer_quant(snakemake@input[["quant_in"]])
 
-# FRiP on final TSS set
-stats_cs[["FinalRiP"]]    <- colSums(quant_cs_m)[stats_cs[["Sample"]]]
-stats_in[["FinalRiP"]]    <- colSums(quant_in_m)[stats_in[["Sample"]]]
-stats_in_cs[["FinalRiP"]] <- colSums(quant_in_m)[stats_in_cs[["Sample"]]]
+# csRNA and input quant on input TSS set (for sRiP / sDepletion and miRNA/tRNA metrics)
+quant_inTSS_cs_m <- read_homer_quant(snakemake@input[["quant_in_cs"]])
+quant_inTSS_in_m <- read_homer_quant(snakemake@input[["quant_in_in"]])
 
-stats_cs[["FinalFRiP"]]    <- stats_cs[["FinalRiP"]]    / stats_cs[["NuclearReads"]]
-stats_in[["FinalFRiP"]]    <- stats_in[["FinalRiP"]]    / stats_in[["NuclearReads"]]
-stats_in_cs[["FinalFRiP"]] <- stats_in_cs[["FinalRiP"]] / stats_in_cs[["NuclearReads"]]
+# ── Metrics re-derived from the final csRNA TSS set ─────────────────────────
 
-stats_cs[["FinalEnrichment"]] <- stats_cs[["FinalFRiP"]] / stats_in_cs[["FinalFRiP"]]
+stats_cs[["csRiP"]]  <- colSums(quant_cs_m)[stats_cs[["Sample"]]]
+stats_in[["csRiP"]]  <- colSums(quant_in_m)[stats_in[["Sample"]]]
+stats_in_cs[["csRiP"]] <- colSums(quant_in_m)[stats_in_cs[["Sample"]]]
 
-# TSSDetected on final set (fraction of TSSs with >= 1 tag)
+stats_cs[["csFRiP"]]    <- stats_cs[["csRiP"]]    / stats_cs[["NuclearReads"]]
+stats_in[["csFRiP"]]    <- stats_in[["csRiP"]]    / stats_in[["NuclearReads"]]
+stats_in_cs[["csFRiP"]] <- stats_in_cs[["csRiP"]] / stats_in_cs[["NuclearReads"]]
+
+stats_cs[["FinalRiP"]]    <- stats_cs[["csRiP"]]
+stats_in[["FinalRiP"]]    <- stats_in[["csRiP"]]
+stats_cs[["FinalFRiP"]]   <- stats_cs[["csFRiP"]]
+stats_in[["FinalFRiP"]]   <- stats_in[["csFRiP"]]
+
+stats_cs[["csRNACappedPct"]] <- 100 * stats_cs[["csFRiP"]]
+stats_cs[["csEnrichment"]]   <- stats_cs[["csFRiP"]] / stats_in_cs[["csFRiP"]]
+stats_cs[["FinalEnrichment"]] <- stats_cs[["csEnrichment"]]
+
+# ── Metrics re-derived from the input TSS set ────────────────────────────────
+# (input TSSs are unaffected by the CPM filter, but we re-derive here from
+# raw quantification rather than copying from the initial QC output)
+
+stats_cs[["sRiP"]]  <- colSums(quant_inTSS_cs_m)[stats_cs[["Sample"]]]
+stats_in[["sRiP"]]  <- colSums(quant_inTSS_in_m)[stats_in[["Sample"]]]
+stats_in_cs[["sRiP"]] <- colSums(quant_inTSS_in_m)[stats_in_cs[["Sample"]]]
+
+stats_cs[["sFRiP"]]    <- stats_cs[["sRiP"]]    / stats_cs[["NuclearReads"]]
+stats_in[["sFRiP"]]    <- stats_in[["sRiP"]]    / stats_in[["NuclearReads"]]
+stats_in_cs[["sFRiP"]] <- stats_in_cs[["sRiP"]] / stats_in_cs[["NuclearReads"]]
+
+stats_cs[["sDepletion"]] <- 1 / (stats_cs[["sFRiP"]] / stats_in_cs[["sFRiP"]])
+
+# ── FinalTSSDetected ─────────────────────────────────────────────────────────
+
 stats_cs[["FinalTSSDetected"]] <- colMeans(quant_cs_m > 0)[stats_cs[["Sample"]]]
 stats_in[["FinalTSSDetected"]] <- colMeans(quant_in_m > 0)[stats_in[["Sample"]]]
 
-# TSS filter summary
+# ── TSS filter summary ───────────────────────────────────────────────────────
+
 tss_final     <- import(trimws(snakemake@input[["tss_final"]]))
 tss_consensus <- import(trimws(snakemake@input[["tss_consensus"]]))
 n_final     <- length(tss_final)
@@ -57,7 +94,8 @@ stats_in[["NConsensusTSS"]] <- n_consensus
 stats_in[["NFinalTSS"]]     <- n_final
 stats_in[["NFilteredTSS"]]  <- n_consensus - n_final
 
-# Replicate correlation on final TSS counts
+# ── Replicate correlation on final TSS counts ────────────────────────────────
+
 stats_cs[["key"]] <- gsub("_csrna[0-9]+$", "", stats_cs[["Sample"]])
 stats_cs[["MinReplCorrSpearman"]] <- NA_real_
 stats_cs[["MinReplCorrPearson"]]  <- NA_real_
@@ -97,41 +135,50 @@ if (length(repl_cor_long)) {
 }
 repl_cor_final[["Stage"]] <- "Final"
 
-# Combine with initial-stage correlations and write
 repl_cor_initial <- suppressWarnings(suppressMessages(
     readr::read_tsv(trimws(snakemake@input[["repl_cor_initial"]]))
 ))
 repl_cor_combined <- rbind(repl_cor_initial, repl_cor_final)
 readr::write_tsv(repl_cor_combined, snakemake@output[["repl_cor"]])
 
+# ── Optional: miRNA and pre-tRNA contamination metrics ──────────────────────
+
+tss_in    <- import(trimws(snakemake@input[["tss_in"]]))
+f_mirna   <- trimws(snakemake@params[["mirnas"]])
+f_trna    <- trimws(snakemake@params[["trnas"]])
+mirna     <- if (nchar(f_mirna)) import(f_mirna) else NULL
+trna      <- if (nchar(f_trna))  import(f_trna)  else NULL
+
+if (!is.null(trna)) {
+    in_pretrna <- mcols(tss_in)[["name"]][overlapsAny(tss_in, trna)]
+    pretrna_rows <- rownames(quant_inTSS_cs_m) %in% in_pretrna
+    stats_cs[["PretRNA"]]     <- colSums(quant_inTSS_cs_m[pretrna_rows, , drop = FALSE])[stats_cs[["Sample"]]]
+    stats_in[["PretRNA"]]     <- colSums(quant_inTSS_in_m[pretrna_rows, , drop = FALSE])[stats_in[["Sample"]]]
+    in_cs_pretrna             <- colSums(quant_inTSS_in_m[pretrna_rows, , drop = FALSE])[stats_in_cs[["Sample"]]]
+    stats_cs[["PretRNAPct"]]  <- with(stats_cs, 100 * (PretRNA / (PretRNA + csRiP)))
+    stats_in[["PretRNAPct"]]  <- with(stats_in, 100 * (PretRNA / (PretRNA + csRiP)))
+    in_cs_pretrnaPct          <- 100 * (in_cs_pretrna / (in_cs_pretrna + stats_in_cs[["csRiP"]]))
+    stats_cs[["PhosEfficiency"]] <- 1 / (stats_cs[["PretRNAPct"]] / in_cs_pretrnaPct)
+}
+
+if (!is.null(mirna)) {
+    in_mirna <- mcols(tss_in)[["name"]][overlapsAny(tss_in, mirna)]
+    mirna_rows <- rownames(quant_inTSS_cs_m) %in% in_mirna
+    stats_cs[["miRNA"]]        <- colSums(quant_inTSS_cs_m[mirna_rows, , drop = FALSE])[stats_cs[["Sample"]]]
+    stats_in[["miRNA"]]        <- colSums(quant_inTSS_in_m[mirna_rows, , drop = FALSE])[stats_in[["Sample"]]]
+    in_cs_mirna                <- colSums(quant_inTSS_in_m[mirna_rows, , drop = FALSE])[stats_in_cs[["Sample"]]]
+    stats_cs[["miRNADepletion"]] <- 1 / (
+        (stats_cs[["miRNA"]] / stats_cs[["NuclearReads"]]) /
+        (in_cs_mirna          / stats_in_cs[["NuclearReads"]])
+    )
+}
+
+# ── Remaining per-library metrics ────────────────────────────────────────────
+
 stats_cs[["StrandBalance"]] <- with(stats_cs, PosReads / (PosReads + NegReads))
 stats_in[["StrandBalance"]] <- with(stats_in, PosReads / (PosReads + NegReads))
 stats_cs[["PctNuclear"]] <- 100 * (stats_cs[["NuclearReads"]] / stats_cs[["TotalReads"]])
 stats_in[["PctNuclear"]] <- 100 * (stats_in[["NuclearReads"]] / stats_in[["TotalReads"]])
-
-# Join library-quality columns from the initial QC output (computed against the
-# merged initial TSS set; characterise library quality independently of the
-# final TSS filter).
-cs_extra <- c("csRiP", "sRiP", "csFRiP", "sFRiP",
-               "csRNACappedPct", "csEnrichment", "sDepletion",
-               "PretRNA", "PretRNAPct", "PhosEfficiency",
-               "miRNA", "miRNADepletion")
-in_extra <- c("csRiP", "sRiP", "csFRiP", "sFRiP",
-               "PretRNA", "PretRNAPct", "miRNA")
-
-qc_cs_init <- read.table(trimws(snakemake@input[["qc_cs_initial"]]),
-                          header = TRUE, stringsAsFactors = FALSE)
-qc_in_init <- read.table(trimws(snakemake@input[["qc_in_initial"]]),
-                          header = TRUE, stringsAsFactors = FALSE)
-
-join_cols <- function(target, source, cols) {
-    cols_present <- intersect(cols, colnames(source))
-    src <- source[match(target[["Sample"]], source[["Sample"]]), cols_present, drop = FALSE]
-    cbind(target, src)
-}
-
-stats_cs <- join_cols(stats_cs, qc_cs_init, cs_extra)
-stats_in <- join_cols(stats_in, qc_in_init, in_extra)
 
 stats_cs[["Status"]] <- ifelse(
     stats_cs[["FinalFRiP"]] > snakemake@config[["qc"]][["min_cs_frip"]] &
@@ -146,4 +193,4 @@ cat("Final TSS set: ", n_final, " of ", n_consensus,
     " consensus TSSs retained (", n_consensus - n_final, " filtered)\n", sep = "")
 cat("Printing summary stats:\n")
 print(cbind(stats_cs[, c("Sample", "Status", "PctNuclear", "FinalFRiP")],
-            FinalFRiP_in = stats_in_cs[["FinalFRiP"]]))
+            FinalFRiP_in = stats_in_cs[["csFRiP"]]))
