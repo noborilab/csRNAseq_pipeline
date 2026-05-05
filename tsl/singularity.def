@@ -1,0 +1,86 @@
+BootStrap: yum
+OSVersion: 9
+MirrorURL: http://yum-repos.hpccluster/AlmaLinux/9/os/$basearch/
+Include: yum
+ 
+%environment
+    export LANG=C
+    export LC_ALL=C
+    export PERL5LIB=$PERL5LIB:/opt/software/homer/bin/
+    export WORKFLOW_DIR=/opt/software/csRNAseq_pipeline
+    export PATH=/opt/software/homer/bin/:$PATH
+    export PATH=/opt/software/bfqutils/:$PATH
+    export PATH=/opt/software/snakemake/bin:$PATH
+    export PATH=/opt/software/samtools/bin:$PATH
+    export PATH=/opt/software/bedtools2/bin:$PATH
+    export PATH=/opt/software/bwa/:$PATH
+
+%post
+    dnf -y install wget langpacks-en_GB.noarch tar gzip perl-App-cpanminus
+    dnf -y install epel-release
+    dnf config-manager --set-enabled crb
+    dnf -y install openblas-devel
+    dnf -y groupinstall "Development Tools"
+    dnf -y install autoconf automake make gcc perl-Data-Dumper
+    dnf -y install zlib-devel bzip2 bzip2-devel xz-devel curl-devel
+    dnf -y install openssl-devel ncurses-devel libdeflate-devel
+    dnf -y install libxml2-devel
+    dnf -y install git
+    dnf -y install pigz
+    dnf -y install python3.11
+
+    mkdir -p /opt/software
+
+    python3.11 -m venv /opt/software/snakemake
+    /opt/software/snakemake/bin/pip install "snakemake==9.13.3" pandas
+
+    cd /opt/software
+    wget https://github.com/samtools/samtools/releases/download/1.21/samtools-1.21.tar.bz2
+    tar xvjf samtools-1.21.tar.bz2
+    cd samtools-1.21
+    ./configure --prefix=/opt/software/samtools
+    make
+    make install
+
+    mkdir -p /opt/software/homer
+    cd /opt/software/homer
+    wget http://homer.ucsd.edu/homer/configureHomer.pl
+    perl configureHomer.pl -install
+    perl configureHomer.pl -install tair10
+
+    cd /opt/software
+    git clone https://github.com/noborilab/bfqutils
+    cd bfqutils
+    make libz
+    make release
+    make test
+
+    cd /opt/software
+    git clone https://github.com/arq5x/bedtools2
+    cd bedtools2
+    make
+
+    cd /opt/software
+    git clone https://github.com/lh3/bwa
+    cd bwa
+    make
+
+    cd /opt/software
+    curl -O https://cdn.rstudio.com/r/rhel-9/pkgs/R-4.4.2-1-1.x86_64.rpm
+    dnf -y install R-4.4.2-1-1.x86_64.rpm
+    rm -rf R-4.4.2-1-1.x86_64.rpm
+    ln -s /opt/R/4.4.2/bin/R /usr/local/bin/R
+    ln -s /opt/R/4.4.2/bin/Rscript /usr/local/bin/Rscript
+
+    R -e "install.packages('readr', repos='http://cran.us.r-project.org')"
+    R -e "install.packages('BiocManager', repos='http://cran.us.r-project.org')"
+    R -e "BiocManager::install('rtracklayer')"
+    R -e "BiocManager::install('edgeR')"
+
+    cd /opt/software
+    git clone https://github.com/noborilab/csRNAseq_pipeline
+    chmod -R a+rX /opt/software/csRNAseq_pipeline
+
+%runscript
+    exec snakemake -s /opt/software/csRNAseq_pipeline/workflow/Snakefile "$@"
+
