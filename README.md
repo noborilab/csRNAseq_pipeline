@@ -25,10 +25,10 @@ conda env create -f workflow/envs/full_env.yaml
 conda activate csRNAseq_dev
 ```
 
-Two tools **must be installed manually** — they are not available via conda:
+At least one dependency will require manual installation, and another must be manually installed on macOS:
 
-- **bfqutils** — see https://github.com/noborilab/bfqutils for installation instructions.
-- **HOMER** — follow the instructions at http://homer.ucsd.edu/homer/introduction/install.html. (Linux users can alternatively install via bioconda: `conda install homer`.) After installation, configure the target genome, e.g.:
+- **bfqutils**: See https://github.com/noborilab/bfqutils for installation instructions.
+- **HOMER**: If not on Linux, follow the instructions at http://homer.ucsd.edu/homer/introduction/install.html. (To also make use of the environment files, delete HOMER from the yaml file.) After installation, configure the target genome, e.g.:
   ```bash
   perl configureHomer.pl -install hg38    # human
   perl configureHomer.pl -install mm10    # mouse
