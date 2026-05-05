@@ -6,22 +6,34 @@ This pipeline processes paired csRNA-seq (capped small RNA) and input (total RNA
 
 ### Dependencies
 
-Install the conda environment:
+Two environment specs are provided under `workflow/envs/`:
+
+| File | Purpose |
+|------|---------|
+| `minimal_env.yaml` | Runtime dependencies for running the pipeline with bwa |
+| `full_env.yaml` | Everything in minimal plus all aligners, the test suite, and development tools |
+
+Create and activate an environment:
 
 ```bash
-conda env create -f workflow/envs/env.yaml
-conda activate csRNAseq_snakemake
+# For running the pipeline
+conda env create -f workflow/envs/minimal_env.yaml
+conda activate csRNAseq
+
+# For development and running the full test suite
+conda env create -f workflow/envs/full_env.yaml
+conda activate csRNAseq_dev
 ```
 
-Two tools **must be installed manually** before running the pipeline — they are not on Bioconda:
+Two tools **must be installed manually** — they are not available via conda:
 
-- **HOMER** — follow the instructions at http://homer.ucsd.edu/homer/introduction/install.html. After installation, configure the target genome (if it exists as a HOMER genome), e.g.:
+- **bfqutils** — see the project repository for installation instructions.
+- **HOMER** — follow the instructions at http://homer.ucsd.edu/homer/introduction/install.html. (Linux users can alternatively install via bioconda: `conda install homer`.) After installation, configure the target genome, e.g.:
   ```bash
   perl configureHomer.pl -install hg38    # human
   perl configureHomer.pl -install mm10    # mouse
   perl configureHomer.pl -install tair10  # Arabidopsis
   ```
-- **bfqutils** — see the project repository for installation instructions.
 
 ## Running the Pipeline
 
