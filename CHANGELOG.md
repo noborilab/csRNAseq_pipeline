@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - End-to-end tests for bwa-mem and hisat2 alignment programs, runnable via
   `./tests/run_tests.sh bwa-mem` and `./tests/run_tests.sh hisat2`; both
   are included in the `all` subcommand.
+- `workflow/envs/minimal_env.yaml` rewritten as a portable, cross-platform
+  conda spec with correct channel order (`conda-forge` before `bioconda`),
+  minimum-version constraints, and notes for the two manual-install
+  dependencies (bfqutils, HOMER on macOS).
+- `workflow/envs/full_env.yaml` for development and running the full test
+  suite; adds STAR, bowtie2, hisat2, pytest, snakefmt, and vim on top of
+  the minimal spec.
+
+### Fixed
+- Sample sheet validation no longer fails when an optional column
+  (`read_r2`, `input_name`, `replicate`) is present in the header but has
+  all-empty values.  pandas reads empty cells as `NaN`; the `fillna`
+  normalisation now runs before `snakemake.utils.validate` so the
+  DataFrame is clean before the JSON schema type check.
 
 ## [0.1.0] - 2026-05-04
 
