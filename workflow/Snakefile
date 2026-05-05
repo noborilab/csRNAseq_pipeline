@@ -15,8 +15,9 @@ configfile: "config/config.yaml"
 validate(config, "schemas/config.schema.yaml")
 
 sampletab = pd.read_csv(config["sample_table"], sep="\t")
-validate(sampletab, "schemas/samples.schema.yaml")
-# Ensure optional columns exist with defaults (schema defaults may not propagate to DataFrame)
+# Fill optional columns before validation so that a column present in the
+# header but with all-empty values (read as NaN by pandas) does not fail
+# the JSON schema type check for "string".
 if "replicate" not in sampletab.columns:
     sampletab["replicate"] = 1
 if "read_r2" not in sampletab.columns:
@@ -26,6 +27,7 @@ if "input_name" not in sampletab.columns:
 sampletab["replicate"] = sampletab["replicate"].fillna(1).astype(int)
 sampletab["read_r2"] = sampletab["read_r2"].fillna("").astype(str)
 sampletab["input_name"] = sampletab["input_name"].fillna("").astype(str)
+validate(sampletab, "schemas/samples.schema.yaml")
 sampletab["sample_name"] = sampletab["sample_name"].str.strip()
 sampletab["input_name"] = sampletab["input_name"].str.strip()
 sampletab["id"] = list(
