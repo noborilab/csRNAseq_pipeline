@@ -45,4 +45,4 @@ dependencies:
 
   # ── Not available via conda ─────────────────────────────────────────────────
   # bfqutils (adapter trimming) must be installed manually:
-  #   https://github.com/bjmt/bfqutils
+  #   https://github.com/noborilab/bfqutils

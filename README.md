@@ -27,7 +27,7 @@ conda activate csRNAseq_dev
 
 Two tools **must be installed manually** — they are not available via conda:
 
-- **bfqutils** — see the project repository for installation instructions.
+- **bfqutils** — see https://github.com/noborilab/bfqutils for installation instructions.
 - **HOMER** — follow the instructions at http://homer.ucsd.edu/homer/introduction/install.html. (Linux users can alternatively install via bioconda: `conda install homer`.) After installation, configure the target genome, e.g.:
   ```bash
   perl configureHomer.pl -install hg38    # human
