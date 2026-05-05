@@ -244,9 +244,9 @@ rule all:
         OUTPUT_DIR + "/qc/stats_in.txt",
         OUTPUT_DIR + "/qc/qc_cs.txt",
         OUTPUT_DIR + "/qc/qc_in.txt",
-        OUTPUT_DIR + "/qc/replicate_correlation.txt",
         OUTPUT_DIR + "/qc/qc_final_cs.txt",
         OUTPUT_DIR + "/qc/qc_final_in.txt",
+        OUTPUT_DIR + "/qc/replicate_correlation.txt",
         OUTPUT_DIR + "/tss.final.raw.txt",
         OUTPUT_DIR + "/tss.final.cpm.txt",
         OUTPUT_DIR + "/norm_factors.txt",
@@ -728,7 +728,7 @@ rule qc_initial_tss:
     output:
         qc_cs=OUTPUT_DIR + "/qc/qc_cs.txt",
         qc_in=OUTPUT_DIR + "/qc/qc_in.txt",
-        repl_cor=OUTPUT_DIR + "/qc/replicate_correlation.txt",
+        repl_cor=INTERMEDIATE_DIR + "/qc/replicate_correlation_initial.txt",
     resources:
         mem_mb=2000,
     params:
@@ -886,9 +886,13 @@ rule qc_final_tss:
         tss_consensus=OUTPUT_DIR + "/tss.consensus.bed",
         stats_cs=OUTPUT_DIR + "/qc/stats_cs.txt",
         stats_in=OUTPUT_DIR + "/qc/stats_in.txt",
+        qc_cs_initial=OUTPUT_DIR + "/qc/qc_cs.txt",
+        qc_in_initial=OUTPUT_DIR + "/qc/qc_in.txt",
+        repl_cor_initial=INTERMEDIATE_DIR + "/qc/replicate_correlation_initial.txt",
     output:
         qc_cs=OUTPUT_DIR + "/qc/qc_final_cs.txt",
         qc_in=OUTPUT_DIR + "/qc/qc_final_in.txt",
+        repl_cor=OUTPUT_DIR + "/qc/replicate_correlation.txt",
     resources:
         mem_mb=2000,
     params:

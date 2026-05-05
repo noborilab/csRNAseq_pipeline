@@ -95,15 +95,27 @@ def main(outdir: str, filter_pass: bool) -> None:
             fail(f"{label} has {actual} data rows, expected {expected_n}")
         ok(f"{label} has {expected_n} rows")
 
-    # qc_final_cs.txt must have FinalFRiP and NFilteredTSS columns
+    # qc_final_cs.txt must have all expected columns
     import csv
     with open(os.path.join(outdir, "qc/qc_final_cs.txt")) as fh:
         reader = csv.DictReader(fh, delimiter="\t")
         header = reader.fieldnames or []
-    for col in ("FinalFRiP", "FinalEnrichment", "NConsensusTSS", "NFinalTSS", "NFilteredTSS"):
+    for col in (
+        "FinalFRiP", "FinalEnrichment", "NConsensusTSS", "NFinalTSS", "NFilteredTSS",
+        "csRiP", "sRiP", "csFRiP", "sFRiP", "csRNACappedPct", "csEnrichment", "sDepletion",
+        "miRNA", "miRNADepletion", "PretRNA", "PretRNAPct", "PhosEfficiency",
+    ):
         if col not in header:
             fail(f"qc_final_cs.txt missing column: {col}")
     ok("qc_final_cs.txt has required columns")
+
+    # replicate_correlation.txt must have both Stage values
+    with open(os.path.join(outdir, "qc/replicate_correlation.txt")) as fh:
+        repl_rows = list(csv.DictReader(fh, delimiter="\t"))
+    stages = {r["Stage"] for r in repl_rows}
+    if "Initial" not in stages or "Final" not in stages:
+        fail(f"replicate_correlation.txt missing Stage values (got: {stages})")
+    ok("replicate_correlation.txt has both Initial and Final stages")
 
     # NFilteredTSS == NConsensusTSS - NFinalTSS (spot-check first row)
     with open(os.path.join(outdir, "qc/qc_final_cs.txt")) as fh:

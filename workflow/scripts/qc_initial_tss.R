@@ -145,6 +145,7 @@ if (length(repl_cor_long)) {
         stringsAsFactors = FALSE
     )
 }
+repl_cor_df[['Stage']] <- 'Initial'
 readr::write_tsv(repl_cor_df, OUT_REPLCOR)
 
 if (!is.null(trna)) {
