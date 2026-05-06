@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-06
+
 ### Added
 - End-to-end tests for bwa-mem and hisat2 alignment programs, runnable via
   `./tests/run_tests.sh bwa-mem` and `./tests/run_tests.sh hisat2`; both
@@ -80,4 +82,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `zcat` on macOS (BSD) cannot decompress `.gz` files; replaced with
   `gzip -dc` throughout.
 
+[0.2.0]: https://github.com/bjmt/csRNAseq_pipeline/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/bjmt/csRNAseq_pipeline/releases/tag/v0.1.0
