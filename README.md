@@ -25,9 +25,10 @@ conda env create -f workflow/envs/full_env.yaml
 conda activate csRNAseq_dev
 ```
 
-At least one dependency will require manual installation, and another must be manually installed on macOS:
+At least two dependencies require manual installation:
 
 - **bfqutils**: See https://github.com/noborilab/bfqutils for installation instructions.
+- **bam2td**: See https://github.com/noborilab/bam2td for installation instructions.
 - **HOMER**: If not on Linux, follow the instructions at http://homer.ucsd.edu/homer/introduction/install.html. (To also make use of the environment files, delete HOMER from the yaml file.) After installation, configure the target genome, e.g.:
   ```bash
   perl configureHomer.pl -install hg38    # human
@@ -119,7 +120,7 @@ filtering:
 | `build_index` | (Conditional) Build a genome index for the selected aligner from `genome_fasta` if no index is found at `genome_index`. |
 | `trim` | Adapter trimming and length truncation (bfqutils). Stats written to `qc/`. |
 | `align` | Genome alignment (bwa-aln / bwa-mem / STAR / bowtie2 / hisat2), MAPQ and length filtering, BAM sorting and indexing. |
-| `make_tagdir` | HOMER tag directory from BAM. |
+| `make_tagdir` | Tag directory from BAM (bam2td). |
 | `find_tss_initial` | Per-sample TSS calling (HOMER `findcsRNATSS.pl`) using the paired input library as background. Run on both csRNA and input samples. |
 | `make_raw_bedgraph` | Strand-separated raw bedGraph files (HOMER `makeUCSCfile`). |
 | `gather_stats` | Extract total reads, organellar reads, and tag frequencies from HOMER tagInfo files. |

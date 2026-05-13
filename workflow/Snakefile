@@ -468,11 +468,9 @@ rule align:
 
 rule make_tagdir:
     message:
-        "Building HOMER tag directory for {wildcards.sample}"
+        "Building tag directory for {wildcards.sample}"
     input:
         INTERMEDIATE_DIR + "/bam/{sample}.sort.bam",
-    shadow:
-        "minimal"
     output:
         directory(OUTPUT_DIR + "/tagdir/{sample}"),
     log:
@@ -483,11 +481,11 @@ rule make_tagdir:
         mem_mb=4000,
     params:
         genome=config["program"]["homer"]["genome"],
-        opt=config["program"]["homer"]["tagdir"]["extra_args"],
+        opt=config["program"]["homer"].get("tagdir", {}).get("extra_args", ""),
     shell:
         """
-            samtools view -h {input} > input.sam
-            makeTagDirectory {output} input.sam -genome {params.genome} {params.opt} > {log} 2>&1
+            bam2td {output} {input} -genome {params.genome} {params.opt} > {log} 2>&1
+            makeTagDirectory {output} -update -checkGC -genome {params.genome} >> {log} 2>&1
         """
 
 

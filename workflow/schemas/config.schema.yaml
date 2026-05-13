@@ -183,10 +183,9 @@ properties:
             properties:
               extra_args:
                 type: string
-                default: "-checkGC"
+                default: ""
                 description: >
-                  Extra arguments passed to makeTagDirectory. -checkGC
-                  calculates GC-content statistics useful for QC.
+                  Extra arguments passed to bam2td (e.g. -mapq, -tbp).
           tss:
             type: object
             properties:

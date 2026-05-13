@@ -38,7 +38,7 @@ program:
   homer:
     genome: "tests/data/genome.fa"
     tagdir:
-      extra_args: "-checkGC"
+      extra_args: ""
     tss:
       size: 100
       ntagthreshold: 3

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-13
+
+### Changed
+- `make_tagdir` now uses `bam2td` instead of HOMER `makeTagDirectory`.
+  bam2td reads sorted BAMs directly (no intermediate SAM conversion) and
+  produces a compatible HOMER tag directory.  The `shadow: "minimal"` and
+  the `samtools view -h` conversion step are removed.  `makeTagDirectory -update -checkGC -genome` is run afterwards to
+  populate QC files (e.g. `tagFreq.txt`, `tagGCcontent.txt`) that bam2td
+  does not generate.  The `homer.tagdir.extra_args` config key is still
+  supported and passed directly to bam2td.
+
 ## [0.3.0] - 2026-05-13
 
 ### Added
@@ -107,6 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `zcat` on macOS (BSD) cannot decompress `.gz` files; replaced with
   `gzip -dc` throughout.
 
+[0.4.0]: https://github.com/bjmt/csRNAseq_pipeline/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/bjmt/csRNAseq_pipeline/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/bjmt/csRNAseq_pipeline/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/bjmt/csRNAseq_pipeline/releases/tag/v0.1.0
