@@ -69,8 +69,8 @@ def main(outdir: str, filter_pass: bool) -> None:
         "qc/qc_initial_cs.txt",
         "qc/qc_initial_in.txt",
         "qc/replicate_correlation.txt",
-        "qc/qc_final_cs.txt",
-        "qc/qc_final_in.txt",
+        "qc_final_cs.txt",
+        "qc_final_in.txt",
         "qc/stats_initial_cs.txt",
         "qc/stats_initial_in.txt",
     ]:
@@ -85,8 +85,8 @@ def main(outdir: str, filter_pass: bool) -> None:
     for fname, expected_n, label in [
         ("qc/qc_initial_cs.txt", n_cs, "qc_initial_cs"),
         ("qc/qc_initial_in.txt", n_in, "qc_initial_in"),
-        ("qc/qc_final_cs.txt",   n_cs, "qc_final_cs"),
-        ("qc/qc_final_in.txt",   n_in, "qc_final_in"),
+        ("qc_final_cs.txt",      n_cs, "qc_final_cs"),
+        ("qc_final_in.txt",      n_in, "qc_final_in"),
         ("qc/stats_initial_cs.txt", n_cs, "stats_initial_cs"),
         ("qc/stats_initial_in.txt", n_in, "stats_initial_in"),
     ]:
@@ -97,13 +97,14 @@ def main(outdir: str, filter_pass: bool) -> None:
 
     # qc_final_cs.txt must have all expected columns
     import csv
-    with open(os.path.join(outdir, "qc/qc_final_cs.txt")) as fh:
+    with open(os.path.join(outdir, "qc_final_cs.txt")) as fh:
         reader = csv.DictReader(fh, delimiter="\t")
         header = reader.fieldnames or []
     for col in (
         "FinalFRiP", "FinalEnrichment", "NConsensusTSS", "NFinalTSS", "NFilteredTSS",
         "csRiP", "sRiP", "csFRiP", "sFRiP", "csRNACappedPct", "csEnrichment", "sDepletion",
-        "miRNA", "miRNADepletion", "PretRNA", "PretRNAPct", "PhosEfficiency",
+        "miRNA", "miRNADepletion", "miRNAPct", "PretRNA", "PretRNAPct", "PhosEfficiency",
+        "group", "RawReads", "TrimmedReads",
     ):
         if col not in header:
             fail(f"qc_final_cs.txt missing column: {col}")
@@ -118,7 +119,7 @@ def main(outdir: str, filter_pass: bool) -> None:
     ok("replicate_correlation.txt has both Initial and Final stages")
 
     # NFilteredTSS == NConsensusTSS - NFinalTSS (spot-check first row)
-    with open(os.path.join(outdir, "qc/qc_final_cs.txt")) as fh:
+    with open(os.path.join(outdir, "qc_final_cs.txt")) as fh:
         row = next(csv.DictReader(fh, delimiter="\t"))
     nc = int(float(row["NConsensusTSS"]))
     nf = int(float(row["NFinalTSS"]))

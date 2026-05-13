@@ -284,6 +284,20 @@ properties:
           Minimum number of csRNA samples that must have CPM ≥ tss_min_cpm
           for a TSS to be retained in tss.final.bed. Has no effect when
           tss_min_cpm is 0.
+      tss_min_cs_in_ratio:
+        type: number
+        default: 0
+        description: >
+          Minimum csRNA/input read ratio for a TSS to count as "expressed"
+          in a sample. A TSS is kept only if this ratio is met in at least
+          tss_min_ratio_samples csRNA samples. Default 0 disables the filter.
+      tss_min_ratio_samples:
+        type: integer
+        default: 1
+        description: >
+          Minimum number of csRNA samples that must have csRNA/input ratio
+          >= tss_min_cs_in_ratio for a TSS to be retained. Has no effect
+          when tss_min_cs_in_ratio is 0.
       mask_srnas_from_bw:
         type: boolean
         default: True

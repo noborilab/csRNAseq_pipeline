@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-13
+
+### Added
+- `RawReads` and `TrimmedReads` columns in `stats_initial_cs.txt` and
+  `stats_initial_in.txt` (and propagated to all QC output files), parsed
+  from bfqutils `.trimming.txt` logs; multi-file samples are handled by
+  summing across all per-file log entries.
+- `miRNAPct` column (miRNA reads / NuclearReads × 100) in all QC output
+  files, computed alongside the existing `miRNA` and `miRNADepletion` metrics.
+- `tss_min_cs_in_ratio` and `tss_min_ratio_samples` config parameters: a
+  new csRNA/input read-ratio filter applied in `normalize_tss_quantification`
+  after the CPM filter.  Uses the already-computed input quantification of
+  the initial csRNA TSS set (`all_cs.tss_merged_quant_in.txt`) so no extra
+  HOMER run is required.  Defaults to 0 (disabled).
+
+### Changed
+- `key` column renamed to `group` in all QC output files (`qc_initial_cs.txt`,
+  `qc_initial_in.txt`, `qc_final_cs.txt`, `qc_final_in.txt`).
+- `qc_final_cs.txt` and `qc_final_in.txt` now written to the results root
+  directory rather than `qc/`.
+- `tss_merged/` outputs (`all_cs.tss_merged.bed`, `all_in.tss_merged.bed`,
+  and all derived quantification files) now land in the results directory
+  rather than the intermediate directory.
+- `generate_normalized_bw` rule memory increased from 2 000 MB to 4 000 MB.
+
 ## [0.2.0] - 2026-05-06
 
 ### Added
@@ -82,5 +107,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `zcat` on macOS (BSD) cannot decompress `.gz` files; replaced with
   `gzip -dc` throughout.
 
+[0.3.0]: https://github.com/bjmt/csRNAseq_pipeline/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/bjmt/csRNAseq_pipeline/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/bjmt/csRNAseq_pipeline/releases/tag/v0.1.0

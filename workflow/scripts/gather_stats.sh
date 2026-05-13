@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-printf "Sample\tTotalReads\tOrganelleReads\tFreq1A\tPosReads\tNegReads\n" > "$OUT"
+printf "Sample\tRawReads\tTrimmedReads\tTotalReads\tOrganelleReads\tFreq1A\tPosReads\tNegReads\n" > "$OUT"
 for i in "$@"; do
     if [[ ! -f "$OUT_PREFIX/$i/tagInfo.txt" ]]; then
         echo "ERROR: tagInfo.txt not found for sample $i (${OUT_PREFIX}/${i}/tagInfo.txt)" >&2
@@ -13,6 +13,11 @@ for i in "$@"; do
         exit 1
     fi
     printf "%s\t" "$i" >> "$OUT"
+    # Sum all "Processed N reads" lines (multiple lines when input had several files)
+    awk '/^Processed/{gsub(",","",$0); s+=$2} END{print s+0}' "$LOG_PREFIX/${i}.trimming.txt" | tr -d '\n' >> "$OUT"
+    printf "\t" >> "$OUT"
+    awk '/^Output/{gsub(",","",$0); s+=$2} END{print s+0}' "$LOG_PREFIX/${i}.trimming.txt" | tr -d '\n' >> "$OUT"
+    printf "\t" >> "$OUT"
     grep "^genome=" "$OUT_PREFIX/$i/tagInfo.txt" | cut -f3 | tr -d '\n' >> "$OUT"
     printf "\t" >> "$OUT"
     organelle_total=0

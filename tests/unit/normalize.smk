@@ -16,6 +16,7 @@ TEST_OUTDIR = config.get("test_outdir", "tests/unit/tmp_normalize")
 rule test_normalize_tss_quantification:
     input:
         quant=FIXTURES + "/tss.consensus.homer.raw.txt",
+        quant_in=FIXTURES + "/tss.consensus.in.homer.raw.txt",
         bed=FIXTURES + "/tss.consensus.bed",
     output:
         bed=TEST_OUTDIR + "/tss.final.bed",
@@ -25,5 +26,9 @@ rule test_normalize_tss_quantification:
     params:
         min_cpm=config["filtering"].get("tss_min_cpm", 0),
         min_samples=config["filtering"].get("tss_min_samples", 1),
+        min_cs_in_ratio=config["filtering"].get("tss_min_cs_in_ratio", 0),
+        min_ratio_samples=config["filtering"].get("tss_min_ratio_samples", 1),
+        cs_ids="condA_csrna1 condA_csrna2 condB_csrna1",
+        paired_in_ids="condA_input1 condA_input2 condA_input1",
     script:
         "../../workflow/scripts/normalize_tss_quantification.R"

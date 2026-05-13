@@ -147,7 +147,7 @@ def assert_qc_initial(outdir: str) -> None:
     # Required columns present in qc_initial_cs.txt
     with open(qc_cs_path) as fh:
         hdr = fh.readline().strip().split("\t")
-    for col in ("csFRiP", "csEnrichment", "TSSDetected"):
+    for col in ("csFRiP", "csEnrichment", "TSSDetected", "group", "RawReads", "TrimmedReads"):
         if col not in hdr:
             fail(f"qc_initial_cs.txt missing column: {col}")
     ok("qc_initial_cs.txt has expected columns")
@@ -175,6 +175,7 @@ def assert_qc_final(outdir: str) -> None:
     for col in (
         "FinalFRiP", "FinalEnrichment", "NConsensusTSS", "NFinalTSS", "NFilteredTSS",
         "csRiP", "sRiP", "csFRiP", "sFRiP", "csRNACappedPct", "csEnrichment", "sDepletion",
+        "group", "RawReads", "TrimmedReads",
     ):
         if col not in hdr:
             fail(f"qc_final_cs.txt missing column: {col}")

@@ -34,9 +34,9 @@ if (anyNA(m)) {
 }
 stats_in_cs <- stats_in[match(m, stats_in[['Sample']]), ]
 
-# key: csRNA sample_name group (for replicate correlation grouping).
+# group: csRNA sample_name group (for replicate correlation grouping).
 # Replicates of the same condition share sample_name, so strip the type+rep suffix.
-stats_cs[['key']] <- gsub("_csrna[0-9]+$", "", stats_cs[['Sample']])
+stats_cs[['group']] <- gsub("_csrna[0-9]+$", "", stats_cs[['Sample']])
 
 quant_csTSS_csRNA <- suppressWarnings(suppressMessages(readr::read_tsv(trimws(QUANT_csTSS_csRNA))))
 quant_csTSS_input <- suppressWarnings(suppressMessages(readr::read_tsv(trimws(QUANT_csTSS_input))))
@@ -109,17 +109,17 @@ stats_in[['TSSDetected']] <- colMeans(as.matrix(quant_inTSS_input_m) > 0)[stats_
 stats_cs[['MinReplCorrSpearman']] <- NA_real_
 stats_cs[['MinReplCorrPearson']]  <- NA_real_
 repl_cor_long <- list()
-for (k in unique(stats_cs[['key']])) {
-    samples_k <- stats_cs[['Sample']][stats_cs[['key']] == k]
+for (k in unique(stats_cs[['group']])) {
+    samples_k <- stats_cs[['Sample']][stats_cs[['group']] == k]
     if (length(samples_k) < 2) next
     m_k <- as.matrix(quant_csTSS_csRNA_m[, samples_k])
     cor_sp <- cor(m_k, method = 'spearman')
     cor_pe <- cor(log1p(m_k), method = 'pearson')
     diag(cor_sp) <- NA
     diag(cor_pe) <- NA
-    stats_cs[stats_cs[['key']] == k, 'MinReplCorrSpearman'] <-
+    stats_cs[stats_cs[['group']] == k, 'MinReplCorrSpearman'] <-
         apply(cor_sp, 1, min, na.rm = TRUE)[samples_k]
-    stats_cs[stats_cs[['key']] == k, 'MinReplCorrPearson'] <-
+    stats_cs[stats_cs[['group']] == k, 'MinReplCorrPearson'] <-
         apply(cor_pe, 1, min, na.rm = TRUE)[samples_k]
     pairs <- which(upper.tri(cor_sp), arr.ind = TRUE)
     if (nrow(pairs)) {
@@ -165,6 +165,8 @@ if (!is.null(mirna)) {
     stats_in[['miRNA']] <- colSums(quant_inTSS_input_m[quant_inTSS_input[[1]] %in% in_mirna, ])[stats_in[['Sample']]]
     stats_in_cs_miRNA <- colSums(quant_inTSS_input_m[quant_inTSS_input[[1]] %in% in_mirna, ])[stats_in_cs[['Sample']]]
     stats_cs[['miRNADepletion']] <- 1 / ((stats_cs[['miRNA']] / stats_cs[['NuclearReads']]) / (stats_in_cs_miRNA / stats_in_cs[['NuclearReads']]))
+    stats_cs[['miRNAPct']] <- stats_cs[['miRNA']] / stats_cs[['NuclearReads']] * 100
+    stats_in[['miRNAPct']] <- stats_in[['miRNA']] / stats_in[['NuclearReads']] * 100
 }
 
 stats_cs[['Status']] <- ifelse(stats_cs[['csFRiP']] > snakemake@config[["qc"]][["min_cs_frip"]] & stats_cs[['PctNuclear']] > snakemake@config[["qc"]][["min_pct_nuclear"]], 'Ok', 'FAIL')
