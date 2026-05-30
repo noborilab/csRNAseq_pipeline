@@ -40,14 +40,14 @@ Regenerate unit-test TSV fixtures:
 python tests/scripts/generate_unit_fixtures.py
 ```
 
-Commit the resulting files.  Both scripts are deterministic (fixed seed).
+Commit the resulting files. (Both scripts are deterministic, with a fixed seed, so regenerating without changing the design should give you identical output.)
 
 ## Unit tests
 
-Each file in `tests/unit/*.smk` is a minimal Snakefile containing just one rule.
-It points inputs at `tests/data/unit_fixtures/` and writes outputs to a temp
-directory supplied by the runner.  The R script under test is unmodified —
-it receives the same `snakemake@*` object it would in production.
+Each file in `tests/unit/*.smk` is a minimal Snakefile with just a single rule in it.
+Its inputs point at `tests/data/unit_fixtures/`, and its outputs go to a temporary
+directory the runner supplies. The R script under test is left completely unmodified,
+so it receives exactly the same `snakemake@*` object that it would in a production run.
 
 To run a single unit manually:
 ```bash

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-make_sample_sheet.py — generate a csRNA-seq pipeline sample sheet from a FASTQ directory.
+Generate a csRNA-seq pipeline sample sheet from a directory of FASTQ files.
 
 Usage
 -----
@@ -122,7 +122,7 @@ def build_rows(groups: dict) -> list[dict]:
         r2_files = strands["R2"]
         if not r1_files:
             print(
-                f"WARNING: no R1 files for ({condition}, {stype}, {rep}) — skipping",
+                f"WARNING: no R1 files for ({condition}, {stype}, {rep}), skipping",
                 file=sys.stderr,
             )
             continue
@@ -178,7 +178,7 @@ def main():
     rows = build_rows(groups)
 
     if not rows:
-        print("ERROR: no samples found — check fastq_root and naming convention", file=sys.stderr)
+        print("ERROR: no samples found; check fastq_root and naming convention", file=sys.stderr)
         sys.exit(1)
 
     header = ["sample_name", "sample_type", "replicate", "read_r1", "read_r2"]

@@ -17,7 +17,7 @@ properties:
     description: >
       Path to a two-column (chrom, size) TSV without a header. Only
       chromosomes listed here are kept in merged TSSs, consensus TSSs, and
-      bigWig tracks — omit organelle chromosomes (e.g. Mt, Pt) from this
+      bigWig tracks; omit organelle chromosomes (e.g. Mt, Pt) from this
       file to exclude them from the analysis.
   genome_fasta:
     type: string

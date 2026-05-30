@@ -1,6 +1,6 @@
 ## Overview
 
-This pipeline processes paired csRNA-seq (capped small RNA) and input (total RNA) libraries to identify and quantify transcription start sites (TSSs) genome-wide. It works with any organism for which you have a genome FASTA, and has been tested with *Arabidopsis thaliana* datasets.
+This pipeline takes paired csRNA-seq (capped small RNA) and input (total RNA) libraries and uses them to find and quantify transcription start sites (TSSs) across the genome. In principle it should work with any organism for which you have a genome FASTA, though so far it has really only been tested on *Arabidopsis thaliana* data.
 
 ## Installation
 
@@ -25,11 +25,11 @@ conda env create -f workflow/envs/full_env.yaml
 conda activate csRNAseq_dev
 ```
 
-At least two dependencies require manual installation:
+A few of the dependencies are not on conda (or not for every platform), so they need to be installed by hand:
 
-- **bfqutils**: See https://github.com/noborilab/bfqutils for installation instructions.
-- **bam2td**: See https://github.com/noborilab/bam2td for installation instructions.
-- **HOMER**: If not on Linux, follow the instructions at http://homer.ucsd.edu/homer/introduction/install.html. (To also make use of the environment files, delete HOMER from the yaml file.) After installation, configure the target genome, e.g.:
+- **bfqutils**: see https://github.com/noborilab/bfqutils for installation instructions.
+- **bam2td**: see https://github.com/noborilab/bam2td for installation instructions.
+- **HOMER**: if you are not on Linux, follow the instructions at http://homer.ucsd.edu/homer/introduction/install.html. (If you would still like to use the environment files in that case, just delete the HOMER line from the yaml first.) Once it is installed, configure the genome you are working with, e.g.:
   ```bash
   perl configureHomer.pl -install hg38    # human
   perl configureHomer.pl -install mm10    # mouse
@@ -38,18 +38,20 @@ At least two dependencies require manual installation:
 
 ## Running the Pipeline
 
+With the environment set up and your config and sample table filled in, running the pipeline is just an ordinary Snakemake invocation. You will want at least three cores, since a couple of the HOMER programs always run three threads internally.
+
 ```bash
 # Minimum 3 cores (some HOMER programs always use 3 threads internally)
 snakemake --cores 6 --configfile config/config.yaml
 
-# Dry-run to verify the workflow before executing
+# A dry run first, to check the workflow before actually executing it
 snakemake --cores 6 --configfile config/config.yaml -n
 
 ```
 
 ## Testing
 
-A test suite using a small synthetic genome and synthetic FASTQs lives in `tests/`. It covers schema validation, Snakemake DAG correctness, R-script unit tests, and a full end-to-end run. All committed test data is under 500 KB.
+There is a test suite in `tests/`, built around a small synthetic genome and a set of synthetic FASTQs. It covers schema validation, the correctness of the Snakemake DAG, the R scripts on their own, and a full end-to-end run. (All of the committed test data together comes to under 500 KB, so it is cheap to keep in the repository.)
 
 ```bash
 # Run from the repo root (inside Singularity container or with all tools on PATH)
@@ -58,9 +60,11 @@ A test suite using a small synthetic genome and synthetic FASTQs lives in `tests
 ./tests/run_tests.sh unit        # R-script unit tests
 ```
 
-See `tests/README.md` for detailed instructions and how to regenerate fixtures.
+See [`tests/README.md`](tests/README.md) for the full instructions, including how to regenerate the fixtures.
 
 ## Required config entries
+
+The entries below are the ones worth understanding before your first run.
 
 ### `sample_table`
 
@@ -167,11 +171,11 @@ The `qc_initial_cs.txt` / `qc_initial_in.txt` tables contain the columns below. 
 | `csFRiP` | Fraction of nuclear reads falling in csRNA-called TSSs. Should be > 0.9 for a good csRNA library. |
 | `sFRiP` | Fraction of nuclear reads in input-called (small RNA) TSSs. |
 | `PctNuclear` | Percentage of reads mapping to nuclear chromosomes (i.e. excluding `qc / organelle_chroms`). |
-| `csEnrichment` | Ratio of csRNA FRiP to input FRiP — measures how enriched capped initiation signal is relative to the background. |
+| `csEnrichment` | Ratio of csRNA FRiP to input FRiP, i.e. how enriched the capped initiation signal is relative to the background. |
 | `sDepletion` | Inverse ratio of small RNA signal between csRNA and input libraries. |
 | `PretRNAPct` | Fraction of input-TSS reads overlapping pre-tRNA loci (requires `qc / trnas`). |
-| `PhosEfficiency` | Ratio of pre-tRNA depletion in csRNA vs input — measures 5′-phosphate removal efficiency. |
-| `miRNADepletion` | Ratio of miRNA depletion in csRNA vs input — an independent phosphorylation efficiency metric (requires `qc / mirnas`). |
+| `PhosEfficiency` | Ratio of pre-tRNA depletion in csRNA vs input; a measure of 5′-phosphate removal efficiency. |
+| `miRNADepletion` | Ratio of miRNA depletion in csRNA vs input, an independent phosphorylation-efficiency metric (requires `qc / mirnas`). |
 | `StrandBalance` | Fraction of mapped reads on the + strand. Expect ~0.5 in csRNA libraries; large deviations flag adapter contamination, library-prep strand bias, or pile-ups at a few highly expressed loci. Looser bounds in input libraries since small-RNA biology is genuinely strand-skewed. |
 | `TSSDetected` | Fraction of merged-set TSSs with ≥ 1 tag in this library. Low values flag undersequenced libraries. |
 | `FinalFRiP` | (`qc_final_*` only) FRiP recomputed on `tss.final.bed`. |

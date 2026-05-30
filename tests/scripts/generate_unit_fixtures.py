@@ -6,8 +6,8 @@ Run from the repository root:
     python tests/scripts/generate_unit_fixtures.py
 
 These are small, human-readable TSVs committed alongside the synthetic FASTQ
-data.  Unlike the FASTQ fixtures they are NOT derived from the synthetic genome
-— they are designed to exercise specific code paths in the R scripts.
+data.  Unlike the FASTQ fixtures they are NOT derived from the synthetic genome;
+they are designed to exercise specific code paths in the R scripts.
 """
 
 import os
@@ -81,17 +81,17 @@ def write_bed(path, rows):
 QUANT_CS_CS = {
     "TSS_1":  [100, 90, 80],
     "TSS_2":  [50,  40, 30],
-    "TSS_3":  [5,   0,  0],   # only 1 sample — filtered at min_cpm=1, min_samples=2
-    "TSS_4":  [0,   0,  5],   # only 1 sample — filtered
-    "TSS_5":  [10,  8,  0],   # 2 samples — kept at min_samples=2
+    "TSS_3":  [5,   0,  0],   # only 1 sample; filtered at min_cpm=1, min_samples=2
+    "TSS_4":  [0,   0,  5],   # only 1 sample, filtered
+    "TSS_5":  [10,  8,  0],   # 2 samples, kept at min_samples=2
     "TSS_6":  [3,   2,  1],
-    "TSS_7":  [0,   0,  0],   # zero everywhere — filtered at min_cpm=1
-    "TSS_8":  [0,   3,  0],   # only 1 sample — filtered
+    "TSS_7":  [0,   0,  0],   # zero everywhere, filtered at min_cpm=1
+    "TSS_8":  [0,   3,  0],   # only 1 sample, filtered
     "TSS_9":  [1,   1,  1],
     "TSS_10": [30,  25, 20],
 }
 
-# quant_cs_in: 10 CS-TSSs × 2 input samples (lower counts — input is background)
+# quant_cs_in: 10 CS-TSSs × 2 input samples (lower counts, input is background)
 QUANT_CS_IN = {
     "TSS_1":  [20, 18],
     "TSS_2":  [10,  9],
@@ -114,7 +114,7 @@ QUANT_IN_CS = {
     "INTSS_5": [0,  1,  1],
 }
 
-# quant_in_in: 5 IN-TSSs × 2 input samples (higher than csRNA — input enriched here)
+# quant_in_in: 5 IN-TSSs × 2 input samples (higher than csRNA, input enriched here)
 QUANT_IN_IN = {
     "INTSS_1": [30, 25],
     "INTSS_2": [15, 12],

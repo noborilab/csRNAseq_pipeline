@@ -157,7 +157,7 @@ def assert_qc_initial(outdir: str) -> None:
         rows = list(csv.DictReader(fh, delimiter="\t"))
     samples = [r["Sample"] for r in rows]
     if "condB_csrna1" not in samples:
-        fail("condB_csrna1 not found in qc_initial_cs.txt — shared-input pairing may be broken")
+        fail("condB_csrna1 not found in qc_initial_cs.txt; shared-input pairing may be broken")
     ok("condB_csrna1 present in qc_initial_cs.txt (shared-input pairing works)")
 
 

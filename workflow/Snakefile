@@ -192,7 +192,7 @@ _reps_per_cond = (
 if _min_reps > _reps_per_cond.max():
     sys.exit(
         f"ERROR: tss_min_reps={_min_reps} exceeds the maximum csRNA replicate "
-        f"count ({_reps_per_cond.max()}) — the consensus TSS set would be empty."
+        f"count ({_reps_per_cond.max()}); the consensus TSS set would be empty."
     )
 if _min_reps > _reps_per_cond.min():
     _short = _reps_per_cond[_reps_per_cond < _min_reps].index.tolist()

@@ -15,7 +15,7 @@ dependencies:
   - bwa >=0.7.17
   - samtools >=1.17
   - bedtools >=2.30
-  # Optional: parallel gzip — only needed when use_pigz: True in config
+  # Optional: parallel gzip, only needed when use_pigz: True in config
   - pigz
 
   # ── TSS detection & quantification (HOMER) ──────────────────────────────────
