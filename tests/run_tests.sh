@@ -295,6 +295,29 @@ run_e2e() {
         --configfile "$cfg2" \
         2>&1
     python tests/e2e/assertions.py "$tmp2" --filter-pass
+
+    # The optional HOMER annotation inputs. -rna needs a tag directory, which the pipeline
+    # cannot build (RNA-seq is spliced and longer than csRNA), so reuse one from the run
+    # above as a stand-in, copied outside the output tree so it is not mistaken for a
+    # make_tagdir output.
+    echo ""
+    echo "--- e2e: optional -gtf and -rna wiring ---"
+    local tmp3 cfg3 rnadir
+    tmp3=$(mktemp -d)
+    rnadir=$(mktemp -d)/rna_tagdir
+    mkdir -p "$(dirname "$rnadir")"
+    cp -r "$tmp/tagdir/condA_input1" "$rnadir"
+    cfg3=$(make_cfg "$tmp3" "$tmp3" "$tmp3/index/genome.fa" \
+        --gtf tests/data/annotation.gtf --rnaseq-tagdir "$rnadir")
+    trap "rm -rf $tmp3 $cfg3 $(dirname "$rnadir")" EXIT
+
+    snakemake \
+        --cores 4 \
+        -s workflow/Snakefile \
+        --configfile "$cfg3" \
+        2>&1
+    python tests/e2e/assertions.py "$tmp3" --skip-golden
+    python tests/e2e/check_annotation_wiring.py "$tmp3"
 }
 
 # ── per-aligner e2e ───────────────────────────────────────────────────────────

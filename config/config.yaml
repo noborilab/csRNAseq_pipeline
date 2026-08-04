@@ -58,8 +58,13 @@ program:
       # and the promoter-distal / stable-transcript columns become placeholders.
       # Setting it changes your TSS calls, so compare before adopting.
       gtf: ""
-      # Optional RNA-seq tag directory; enables HOMER's stable-transcript filter.
+      # Optional RNA-seq HOMER tag directory (not FASTQ: the pipeline cannot build
+      # this one, since its trim/align settings are for short unspliced reads and
+      # RNA-seq is spliced and longer, so build it separately with a splice-aware
+      # aligner). Enables HOMER's stable-transcript filter, which does remove TSSs;
+      # set rnaseq_stability_only to use it for annotation only.
       rnaseq_tagdir: ""
+      rnaseq_stability_only: False
       # findcsRNATSS.pl is a legacy shim for findcsRNATSR.pl. Their output is
       # identical; TSR needs HOMER's bin on PERL5LIB, so the shim stays the default.
       program: "findcsRNATSS.pl"

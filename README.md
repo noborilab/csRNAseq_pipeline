@@ -137,6 +137,21 @@ program:
 `rnaseq_tagdir` passes `-rna`, which lets HOMER discard putative TSSs that look like
 processed or exonic RNA. Both default to empty, which is the pipeline's previous behaviour.
 
+Two things to know about it. First, **it is a tag directory, not FASTQ, and the pipeline
+cannot build it for you.** RNA-seq reads are spliced and longer than csRNA reads, while the
+trim step caps reads at `filtering / max_read_length` (70 by default) and the aligners are
+configured for short unspliced reads (`bwa-aln`, or STAR with `align_intron_max: 1`). Sending
+mRNA-seq through that path would quietly give you a wrong tag directory, with junction-spanning
+reads lost and everything truncated. Align your RNA-seq separately with a splice-aware aligner,
+build the tag directory with `makeTagDirectory` or `bam2td`, and point here. The path is checked
+for a `tagInfo.txt` at start-up, because a wrong path otherwise fails deep inside HOMER.
+
+Second, **`-rna` filters, it does not merely annotate.** On the synthetic test data it took
+putative clusters passing the RNA check from 29 down to 17 passing both checks. Set
+`rnaseq_stability_only: true` to pass HOMER's `-noFilterRNA` instead, which uses the RNA-seq
+only for the stable-transcript columns; that is a good way to see how much it would remove
+before letting it remove anything.
+
 ### `program / homer / tss / program`, `pseudo_count`, `default_log2_fold`, `local_fold`
 
 `findcsRNATSS.pl` prints *"this program is a legacy placeholder - please use

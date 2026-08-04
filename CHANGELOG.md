@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-08-04
+
+### Fixed
+- `program/homer/tss/rnaseq_tagdir` and `gtf` were accepted without being checked
+  beyond existence, so a path that was not a HOMER tag directory, or not a GTF,
+  passed start-up and then failed deep inside HOMER. Both are now validated up
+  front: the GTF for nine tab-separated fields, the tag directory for a
+  `tagInfo.txt`, with errors that say what the option actually wants.
+
+### Added
+- `program/homer/tss/rnaseq_stability_only` passes HOMER's `-noFilterRNA`, so
+  RNA-seq can be used for the stable-transcript columns without filtering TSSs.
+  Supplying `rnaseq_tagdir` does filter by default, which is HOMER's behaviour and
+  was not documented: on the synthetic data it took clusters passing the RNA check
+  from 29 down to 17 passing both. Default False, matching HOMER.
+- End-to-end coverage for both optional annotation inputs, plus a GTF fixture for
+  the synthetic genome. `tests/e2e/check_annotation_wiring.py` asserts on HOMER's
+  own report rather than on the flags being present, since both options are easy to
+  wire up so that they look fine and do nothing. It checks that HOMER read the GTF,
+  built non-empty TP and FP sets from it (TP 15, FP 5 on the fixture), chose the
+  input threshold from the data instead of falling back to `-defaultLog2Fold`, and
+  applied a real RNA-seq threshold. Writing it caught that the previous
+  "Skipping TSS assignment" line is not a usable signal: it comes from the internal
+  `annotatePeaks` calls wanting a full HOMER genome directory and appears whether or
+  not `-gtf` was given.
+
+### Changed
+- Documented that `rnaseq_tagdir` is a tag directory rather than FASTQ, and why the
+  pipeline cannot build it: RNA-seq reads are spliced and longer, while the trim
+  step caps reads at `max_read_length` and the aligners are configured for short
+  unspliced reads, so routing mRNA-seq through them would lose junction-spanning
+  reads and truncate the rest.
+
 ## [0.8.0] - 2026-08-04
 
 ### Added

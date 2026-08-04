@@ -95,12 +95,39 @@ OUTPUT_DIR = abspath(config["files"]["output_dir"])
 # working for organisms with no annotation to hand.
 TSS_GTF = (config["program"]["homer"]["tss"].get("gtf") or "").strip()
 TSS_RNA_TAGDIR = (config["program"]["homer"]["tss"].get("rnaseq_tagdir") or "").strip()
-if TSS_GTF and not os.path.exists(TSS_GTF):
-    sys.exit(f"ERROR: program/homer/tss/gtf does not exist: {TSS_GTF!r}")
-if TSS_RNA_TAGDIR and not os.path.isdir(TSS_RNA_TAGDIR):
-    sys.exit(
-        f"ERROR: program/homer/tss/rnaseq_tagdir is not a directory: {TSS_RNA_TAGDIR!r}"
-    )
+if TSS_GTF:
+    if not os.path.isfile(TSS_GTF):
+        sys.exit(f"ERROR: program/homer/tss/gtf does not exist: {TSS_GTF!r}")
+    with open(TSS_GTF) as _fh:
+        _line = next((l for l in _fh if l.strip() and not l.startswith("#")), "")
+    if len(_line.split("\t")) < 9:
+        sys.exit(
+            f"ERROR: program/homer/tss/gtf does not look like a GTF: {TSS_GTF!r}\n"
+            "       Expected 9 tab-separated fields on the first non-comment line."
+        )
+
+# The RNA-seq side takes a tag directory, not FASTQ, and deliberately so: RNA-seq reads are
+# spliced and longer than csRNA reads, whereas this pipeline's trim step caps reads at
+# filtering/max_read_length (70 by default) and its aligners are set up for short unspliced
+# reads (bwa-aln, or STAR with align_intron_max 1). Feeding mRNA-seq through that path would
+# quietly build a wrong tag directory: reads truncated, junction-spanning reads lost. So the
+# RNA-seq tag directory is built separately, with a splice-aware aligner, and pointed at
+# here. Both checks below exist because a bad path otherwise fails deep inside HOMER.
+if TSS_RNA_TAGDIR:
+    if not os.path.isdir(TSS_RNA_TAGDIR):
+        sys.exit(
+            f"ERROR: program/homer/tss/rnaseq_tagdir is not a directory: {TSS_RNA_TAGDIR!r}\n"
+            "       It must be a HOMER tag directory built from your RNA-seq reads, not a\n"
+            "       FASTQ. This pipeline cannot build it for you: its trim and alignment\n"
+            "       settings are for short unspliced reads, so RNA-seq run through them\n"
+            "       would lose spliced reads and be truncated to max_read_length."
+        )
+    if not os.path.isfile(os.path.join(TSS_RNA_TAGDIR, "tagInfo.txt")):
+        sys.exit(
+            f"ERROR: program/homer/tss/rnaseq_tagdir has no tagInfo.txt: {TSS_RNA_TAGDIR!r}\n"
+            "       That file is what makes a directory a HOMER tag directory. Build one\n"
+            "       with makeTagDirectory or bam2td from a splice-aware RNA-seq alignment."
+        )
 
 # findcsRNATSS.pl announces itself as a legacy placeholder for findcsRNATSR.pl. The two
 # are the same program (81 diff lines, all renames and help text) and produce identical
@@ -553,7 +580,11 @@ rule find_tss_initial:
         ntags=config["program"]["homer"]["tss"]["ntagthreshold"],
         opt=config["program"]["homer"]["tss"]["extra_args"],
         gtf=(f"-gtf {TSS_GTF}" if TSS_GTF else ""),
-        rna=(f"-rna {TSS_RNA_TAGDIR}" if TSS_RNA_TAGDIR else ""),
+        rna=(
+            (f"-rna {TSS_RNA_TAGDIR}" if TSS_RNA_TAGDIR else "")
+            + (" -noFilterRNA" if TSS_RNA_TAGDIR and config["program"]["homer"]["tss"]
+               .get("rnaseq_stability_only", False) else "")
+        ),
         pseudo=config["program"]["homer"]["tss"]["pseudo_count"],
         deffold=config["program"]["homer"]["tss"]["default_log2_fold"],
         localfold=config["program"]["homer"]["tss"]["local_fold"],
