@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-04
+
 ### Fixed
 - `gather_stats.sh` summed organelle tag counts in bash integer arithmetic. HOMER
   writes tag counts as floats, and any fractional total (multi-mapper weighting,
