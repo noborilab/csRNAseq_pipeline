@@ -12,6 +12,34 @@ input <- data.frame(row.names = NULL,
 )
 input <- input[input$sample_type == "csrna", ]
 
+# The consensus set is a union, so a library that failed QC does not merely have poor
+# numbers of its own: the spurious clusters it calls enter the shared set and everything
+# downstream quantifies them. Report that either way, and drop those libraries when
+# filtering.exclude_failed_from_consensus is on (off by default, which is the behaviour the
+# pipeline has always had).
+qc <- read.delim(trimws(snakemake@input[["qc_cs"]]), stringsAsFactors = FALSE)
+failed <- qc$Sample[!is.na(qc$Status) & qc$Status == "FAIL"]
+failed <- intersect(failed, input$id)
+exclude_failed <- isTRUE(snakemake@params[["exclude_failed"]])
+if (length(failed)) {
+  if (exclude_failed) {
+    cat("Excluding ", length(failed), " csRNA librar", if (length(failed) == 1) "y" else "ies",
+        " that failed QC from the consensus: ", paste(failed, collapse = ", "), "\n", sep = "")
+    input <- input[!input$id %in% failed, ]
+    if (!nrow(input)) {
+      stop("every csRNA library failed QC, so the consensus set would be empty. ",
+           "Loosen qc/min_cs_frip and qc/min_pct_nuclear, or set ",
+           "filtering.exclude_failed_from_consensus to false.")
+    }
+  } else {
+    cat("WARNING: ", length(failed), " csRNA librar", if (length(failed) == 1) "y" else "ies",
+        " failed QC and still contribute to the consensus union: ",
+        paste(failed, collapse = ", "),
+        "\n         Their spurious clusters enter the shared TSS set. Set ",
+        "filtering.exclude_failed_from_consensus to true to drop them.\n", sep = "")
+  }
+}
+
 nreps <- snakemake@config[["filtering"]][["tss_min_reps"]]
 if (nreps > 1) {
   samples <- unique(input$sample_name)

@@ -26,6 +26,8 @@ All committed test data lives in `tests/data/`:
 | `reads/*.r1.fq.gz` | 500 synthetic reads per sample (~5–10 KB each) |
 | `unit_fixtures/` | Hand-crafted TSVs for R-script unit tests |
 | `unit_fixtures/tagdir/` | Miniature HOMER tag directories whose read lengths are chosen so the read-size composition filter has a known right answer, alongside the expected `tss.consensus.sizes.txt` |
+| `unit_fixtures/qc_initial_cs.txt` | Minimal QC table for the consensus QC gate; `condB_csrna1` is FAIL and is the only library seeing `TSS_7`, so excluding failed libraries is observable |
+| `golden/` | Committed `qc_final_*.txt` from a default e2e run, compared value-by-value so a metric changing silently fails the suite. Refresh with `tests/scripts/update_golden.sh <e2e outdir>` once you have checked the diff is intended |
 
 ### Regenerating fixtures
 

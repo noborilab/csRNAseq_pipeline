@@ -53,6 +53,21 @@ program:
       size: 100
       ntagthreshold: 5
       extra_args: "-includeSingleExons"
+      # Optional gene annotation. Without it HOMER cannot pick the enrichment
+      # threshold from annotated TSSs vs exons and silently uses default_log2_fold,
+      # and the promoter-distal / stable-transcript columns become placeholders.
+      # Setting it changes your TSS calls, so compare before adopting.
+      gtf: ""
+      # Optional RNA-seq tag directory; enables HOMER's stable-transcript filter.
+      rnaseq_tagdir: ""
+      # findcsRNATSS.pl is a legacy shim for findcsRNATSR.pl. Their output is
+      # identical; TSR needs HOMER's bin on PERL5LIB, so the shim stays the default.
+      program: "findcsRNATSS.pl"
+      # HOMER's own defaults, exposed so they can be tuned. pseudo_count is what lets
+      # a cluster with no input coverage pass the enrichment test automatically.
+      pseudo_count: 1.0
+      default_log2_fold: 1
+      local_fold: 2
 
 
 filtering:
@@ -65,6 +80,10 @@ filtering:
   min_alignment_length: 15
   max_mismatch: 999
   tss_min_reps: 1
+  # Drop libraries whose initial QC Status is FAIL from the consensus union. The union
+  # is a union, so a contaminated library's spurious clusters otherwise enter the
+  # shared set. False keeps the historical behaviour; a warning is printed either way.
+  exclude_failed_from_consensus: False
   # Read-size composition filters, both gated by tss_srna_min_reads / min_samples.
   # (1) Known small RNA sizes. Drops clusters whose reads sit mostly in the listed
   # lengths. Empty list disables it; for plants use [21, 22, 23, 24, 25], where the
@@ -77,6 +96,9 @@ filtering:
   # fraction below 1 to enable; 0.8 with n = 2 is a good starting point.
   tss_top_sizes_n: 2
   tss_max_top_sizes_fraction: 1
+  # top1..top<max> are precomputed, so tss_top_sizes_n can be retuned anywhere in that
+  # range without re-reading the tag directories.
+  tss_top_sizes_max: 5
   tss_srna_min_reads: 100
   tss_srna_min_samples: 1
   mask_srnas_from_bw: True

@@ -63,8 +63,10 @@ size_filter <- function(comp, suffix, max_frac, min_reads, min_samples, label, w
     num_cols  <- sub("\\.reads$", suffix, read_cols)
     if (!length(read_cols) || !all(num_cols %in% colnames(comp))) {
         stop("tss.consensus.sizes.txt lacks the ", suffix, " columns this filter needs (",
-             why, " is set). Re-run the tss_size_composition rule ",
-             "(delete tss.consensus.sizes.txt).")
+             why, " is set). Re-run the size composition rules: delete ",
+             "tss.consensus.sizes.txt and results/tss_sizes. If the missing column is a ",
+             "top-n one, check that filtering.tss_top_sizes_n is no greater than ",
+             "filtering.tss_top_sizes_max.")
     }
     ids <- intersect(rownames(quant_m), rownames(comp))
     r <- as.matrix(comp[ids, read_cols, drop = FALSE])
@@ -92,7 +94,9 @@ if (length(srna_sizes) > 0 || max_top_frac < 1) {
     }
 
     if (max_top_frac < 1) {
-        keep_ids <- size_filter(comp, ".topn", max_top_frac, srna_min_reads,
+        # top1..topN are all precomputed by tss_size_composition, so tss_top_sizes_n can be
+        # retuned without re-reading the tag directories; pick the requested one here.
+        keep_ids <- size_filter(comp, paste0(".top", top_n), max_top_frac, srna_min_reads,
             srna_min_samples, sprintf(
                 "Top-%d-lengths filter (>%g%% of reads in the %d commonest lengths in >=%d librar%s with >=%d reads)",
                 top_n, 100 * max_top_frac, top_n, srna_min_samples,

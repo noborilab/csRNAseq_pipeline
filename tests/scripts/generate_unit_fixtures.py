@@ -166,8 +166,26 @@ def write_homer_quant(path, tss_list, sample_ids, counts_dict):
 PER_SAMPLE_TSS = {
     "condA_csrna1": CS_TSS[:6],          # TSS_1..TSS_6
     "condA_csrna2": CS_TSS[:6],          # same set
-    "condB_csrna1": CS_TSS[:4] + [CS_TSS[5]],  # TSS_1..TSS_4, TSS_6
+    # TSS_1..TSS_4, TSS_6, plus TSS_7 which only condB sees. condB is marked FAIL in
+    # qc_initial_cs.txt, so excluding failed libraries from the consensus drops TSS_7 and
+    # nothing else, which makes the flag observable in the output.
+    "condB_csrna1": CS_TSS[:4] + [CS_TSS[5], CS_TSS[6]],
 }
+
+
+# ── Initial QC table, for the consensus QC gate ────────────────────────────────
+QC_INITIAL_CS = [
+    ("condA_csrna1", "Ok"),
+    ("condA_csrna2", "Ok"),
+    ("condB_csrna1", "FAIL"),
+]
+
+
+def write_qc_initial_cs(path):
+    with open(path, "w") as fh:
+        fh.write("Sample\tStatus\n")
+        for sample, status in QC_INITIAL_CS:
+            fh.write(f"{sample}\t{status}\n")
 
 # ── HOMER tag directories for tss_size_composition.R ───────────────────────────
 # Reads placed inside the consensus clusters with chosen lengths, so both read-size
@@ -189,7 +207,8 @@ PER_SAMPLE_TSS = {
 #   others spread over 5-10 lengths (top-2 of 0.20-0.40) → kept
 #   → 7 of 10 kept at min_samples 1, 8 at min_samples 2
 SRNA_SIZES = [21, 22, 23, 24, 25]
-TOP_N = 2
+TOP_N = 2      # the n the filter tests use
+TOP_MAX = 5    # tss_top_sizes_max: top1..top5 are precomputed
 
 
 def spread(n_per, lengths):
@@ -247,15 +266,16 @@ def write_tagdir(path, mix):
 def write_size_composition(path, tag_mix):
     """Hand-computed expected output of tss_size_composition.R for TAG_MIX.
 
-    Holds every column the script can emit (.reads always, .srna when
-    tss_srna_sizes is set, .topn when the top-lengths filter is on, computed at
-    TOP_N). A run with only one filter enabled writes a subset of these columns, and
-    the assertions compare whichever columns it produced.
+    Holds every column the scripts can emit: .reads always, .srna when
+    tss_srna_sizes is set, and .top1 .. .topTOP_MAX when the top-lengths filter is
+    on. A run with only one filter enabled writes a subset of these columns, and the
+    assertions compare whichever columns it produced.
     """
     samples = list(tag_mix)
     header = ["TSS"]
     for s in samples:
-        header += [f"{s}.reads", f"{s}.srna", f"{s}.topn"]
+        header += [f"{s}.reads", f"{s}.srna"]
+        header += [f"{s}.top{n}" for n in range(1, TOP_MAX + 1)]
     with open(path, "w") as fh:
         fh.write("\t".join(header) + "\n")
         for tss in CS_TSS:
@@ -266,8 +286,9 @@ def write_size_composition(path, tag_mix):
                 total = sum(n for n, _ in mix)
                 srna = sum(n for n, ln in mix if ln in SRNA_SIZES)
                 # lengths are distinct within a mix, so each entry is one length's total
-                topn = sum(sorted((n for n, _ in mix), reverse=True)[:TOP_N])
-                row += [str(total), str(srna), str(topn)]
+                desc = sorted((n for n, _ in mix), reverse=True)
+                row += [str(total), str(srna)]
+                row += [str(sum(desc[:n])) for n in range(1, TOP_MAX + 1)]
             fh.write("\t".join(row) + "\n")
 
 
@@ -296,6 +317,8 @@ def main():
     print("  tagdir/*/%s.tags.tsv" % CHROM)
     write_size_composition(os.path.join(UF, "tss.consensus.sizes.txt"), TAG_MIX)
     print("  tss.consensus.sizes.txt")
+    write_qc_initial_cs(os.path.join(UF, "qc_initial_cs.txt"))
+    print("  qc_initial_cs.txt")
 
     # HOMER quant matrices
     write_homer_quant(os.path.join(UF, "tss.consensus.homer.raw.txt"), CS_TSS, CS_IDS, QUANT_CS_CS)

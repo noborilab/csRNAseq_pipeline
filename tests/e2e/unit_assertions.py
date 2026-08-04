@@ -17,6 +17,7 @@ import argparse
 
 N_CS_TSSS  = 10   # rows in tss.consensus.bed fixture
 N_IN_TSSS  = 5    # rows in merged_in.bed fixture
+TOP_SIZES_MAX = 5 # tests/data/config.yaml default for tss_top_sizes_max
 
 REPO     = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 FIXTURES = os.path.join(REPO, "tests", "data", "unit_fixtures")
@@ -83,7 +84,7 @@ def assert_normalize(outdir: str, filtered: bool, expect_kept: int = None) -> No
     ok("raw and cpm tables have same row count as filtered BED")
 
 
-def assert_collect_consensus(outdir: str) -> None:
+def assert_collect_consensus(outdir: str, expect_clusters: int = None) -> None:
     bed_path = os.path.join(outdir, "tss.consensus.bed")
     if not os.path.exists(bed_path):
         fail(f"Missing output: {bed_path}")
@@ -102,6 +103,11 @@ def assert_collect_consensus(outdir: str) -> None:
     if too_narrow:
         fail(f"{len(too_narrow)} TSSs are narrower than 150 bp: {too_narrow[:5]}")
     ok(f"All {len(widths)} TSSs are >= 150 bp")
+
+    if expect_clusters is not None:
+        if len(widths) != expect_clusters:
+            fail(f"consensus has {len(widths)} TSSs, expected {expect_clusters}")
+        ok(f"Consensus has exactly {expect_clusters} TSSs")
 
     # Only valid chromosomes (testchr1 from the test chrom.sizes)
     chroms = set()
@@ -245,7 +251,10 @@ def assert_size_composition(outdir: str, srna_enabled: bool, top_enabled: bool) 
 
     cols = [c for c in rows[0] if c != "TSS"]
     suffixes = {c.rsplit(".", 1)[1] for c in cols}
-    want = {"reads"} | ({"srna"} if srna_enabled else set()) | ({"topn"} if top_enabled else set())
+    want = {"reads"} | ({"srna"} if srna_enabled else set())
+    if top_enabled:
+        # top1..topN are all precomputed so that tss_top_sizes_n can be retuned freely
+        want |= {f"top{n}" for n in range(1, TOP_SIZES_MAX + 1)}
     if suffixes != want:
         fail(f"expected column kinds {sorted(want)}, got {sorted(suffixes)}")
     missing = [c for c in cols if c not in expected[next(iter(expected))]]
@@ -278,7 +287,9 @@ if __name__ == "__main__":
     parser.add_argument("--srna-enabled", action="store_true",
                         help="For size_composition: expect .srna columns")
     parser.add_argument("--top-enabled", action="store_true",
-                        help="For size_composition: expect .topn columns")
+                        help="For size_composition: expect top1..topN columns")
+    parser.add_argument("--expect-clusters", type=int, default=None,
+                        help="For collect_consensus: exact number of consensus TSSs")
     args = parser.parse_args()
 
     fn = RULES[args.rule]
@@ -286,6 +297,8 @@ if __name__ == "__main__":
         fn(args.outdir, args.filtered, args.expect_kept)
     elif args.rule == "size_composition":
         fn(args.outdir, args.srna_enabled, args.top_enabled)
+    elif args.rule == "collect_consensus":
+        fn(args.outdir, args.expect_clusters)
     else:
         fn(args.outdir)
 

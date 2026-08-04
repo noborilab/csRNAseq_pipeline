@@ -21,6 +21,7 @@ rule test_collect_consensus_tss:
             FIXTURES + "/per_sample_tss/condB_csrna1.tss.bed",
         ],
         tss_in=FIXTURES + "/merged_in.bed",
+        qc_cs=FIXTURES + "/qc_initial_cs.txt",
     output:
         TEST_OUTDIR + "/tss.consensus.bed",
     params:
@@ -34,5 +35,6 @@ rule test_collect_consensus_tss:
         chrom_sizes="tests/data/chrom.sizes",
         mirnas="tests/data/mirnas.bed",
         trnas="tests/data/trnas.bed",
+        exclude_failed=config["filtering"].get("exclude_failed_from_consensus", False),
     script:
         "../../workflow/scripts/collect_consensus_tss.R"

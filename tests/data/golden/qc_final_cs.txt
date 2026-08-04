@@ -1,0 +1,4 @@
+Sample	RawReads	TrimmedReads	TotalReads	OrganelleReads	Freq1A	PosReads	NegReads	NuclearReads	csRiP	csFRiP	csRNACappedPct	csEnrichment	sRiP	sFRiP	sDepletion	FinalTSSDetected	NConsensusTSS	NFinalTSS	NFilteredTSS	group	MinReplCorrSpearman	MinReplCorrPearson	PretRNA	PretRNAPct	PhosEfficiency	miRNA	miRNADepletion	miRNAPct	StrandBalance	PctNuclear	Status
+condA_csrna1	500	500	500	0	0.26	347	153	500	358	0.716	71.6	2.5211267605633805	0	0	NA	1	26	26	0	condA	0.60422761080368	0.5273890876768268	0	0	NA	0	NA	0	0.694	100	Ok
+condA_csrna2	500	500	500	0	0.236948	343	157	500	366	0.732	73.2	2.652173913043478	0	0	NA	1	26	26	0	condA	0.60422761080368	0.5273890876768268	0	0	NA	0	NA	0	0.686	100	Ok
+condB_csrna1	500	500	500	0	0.217304	346	154	500	366	0.732	73.2	2.5774647887323945	0	0	NA	1	26	26	0	condB	NA	NA	0	0	NA	0	NA	0	0.692	100	Ok

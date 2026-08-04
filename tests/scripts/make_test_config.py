@@ -31,6 +31,8 @@ def main():
     p.add_argument("--max-top-sizes-fraction", type=float, default=None,
                    help="Enable the top-lengths filter at this fraction (1 disables)")
     p.add_argument("--top-sizes-n", type=int, default=None)
+    p.add_argument("--exclude-failed", action="store_true",
+                   help="Set filtering.exclude_failed_from_consensus")
     p.add_argument("--alignment-program",
                    choices=["bwa-aln", "bwa-mem", "STAR", "bowtie2", "hisat2"],
                    default=None)
@@ -73,6 +75,8 @@ def main():
         cfg["filtering"]["tss_max_top_sizes_fraction"] = args.max_top_sizes_fraction
     if args.top_sizes_n is not None:
         cfg["filtering"]["tss_top_sizes_n"] = args.top_sizes_n
+    if args.exclude_failed:
+        cfg["filtering"]["exclude_failed_from_consensus"] = True
     if args.alignment_program is not None:
         cfg["program"]["alignment_program"] = args.alignment_program
         # STAR's SA pre-indexing string must satisfy genomeSAindexNbases ≤ log2(L)/2-1.

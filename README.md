@@ -107,6 +107,77 @@ Path to the pre-built genome index for the selected aligner. If the index does n
 
 HOMER genome name (e.g. `hg38`, `mm10`, `tair10`). Must match a genome configured in your HOMER installation, **or** a file path for a FASTA of your custom genome.
 
+### `program / homer / tss / gtf` (optional, and worth setting)
+
+Optional gene annotation passed to HOMER as `-gtf`. Without it, and without a HOMER genome
+that carries its own annotation, HOMER cannot build the annotated-TSS and exon sets it uses
+as true and false positives to choose the enrichment threshold for each library. It falls
+back to `default_log2_fold` silently: the only sign in the log is
+
+```
+Skipping TSS assignment (can't find file for genome genome.fa)
+Total TP (tss) regions: 0     Total FP (exon) regions: 0
+Using the default input threshold (1)
+```
+
+and `Fraction Promoter-Distal TSS clusters: 100.00%` with
+`Fraction of stable transcript TSS clusters: 0.00%` in every `tss.txt`, which are
+placeholders rather than results. Supplying a GTF turns all of that on. It is the largest
+single quality lever in the configuration, and it **changes your TSS calls**, so compare a
+GTF run against your existing consensus before adopting it rather than swapping mid-project.
+
+```yaml
+program:
+  homer:
+    tss:
+      gtf: "/path/to/annotation.gtf"
+      rnaseq_tagdir: "/path/to/rnaseq_tagdir"   # optional, enables HOMER's stable-RNA filter
+```
+
+`rnaseq_tagdir` passes `-rna`, which lets HOMER discard putative TSSs that look like
+processed or exonic RNA. Both default to empty, which is the pipeline's previous behaviour.
+
+### `program / homer / tss / program`, `pseudo_count`, `default_log2_fold`, `local_fold`
+
+`findcsRNATSS.pl` prints *"this program is a legacy placeholder - please use
+findcsRNATSR.pl instead"*. The two are the same program: 81 lines of diff, all renames and
+help text. Verified on a 34,891-cluster library, their tables are identical row for row, so
+switching changes nothing except output file names and labels, which the pipeline
+normalises. The default stays on the legacy name because `findcsRNATSR.pl` ships with an
+unpatched `use lib` pointing at its author's own install, so it only finds `HomerConfig`
+when HOMER's `bin` is on `PERL5LIB`. Check that inside your container, then set
+`program: "findcsRNATSR.pl"`.
+
+Three HOMER thresholds are now configurable, all defaulting to HOMER's own values so
+nothing changes until you touch them:
+
+- `pseudo_count` (1.0) is added to both sides of the enrichment ratio, and is what lets a
+  cluster with zero input coverage pass automatically, since `log2((cs+1)/(0+1))` is large
+  by construction. Raise it to demand real input coverage.
+- `default_log2_fold` (1) is the threshold actually in force whenever no annotation is
+  supplied, per the section above.
+- `local_fold` (2) is the local enrichment required during initial TSS identification.
+
+### `filtering / exclude_failed_from_consensus`
+
+The consensus set is a union, so a library that failed QC does not simply have poor numbers
+of its own: the spurious clusters it calls enter the shared set, and everything downstream
+quantifies them. On one Arabidopsis panel, two contaminated libraries contributed about
+2,300 transposon-promoter clusters each, and 1,745 of 3,839 such clusters came from exactly
+one library.
+
+Default `False`, which keeps the historical behaviour of building the union from every
+csRNA library. A warning naming the offending libraries is printed either way.
+
+```yaml
+filtering:
+  exclude_failed_from_consensus: true
+```
+
+`Status` is FAIL when `csFRiP` is below `qc / min_cs_frip` or nuclear percentage is below
+`qc / min_pct_nuclear`. Consider `tss_min_reps: 2` alongside it, so that no single library
+can inject a cluster on its own.
+
 ### `filtering / tss_min_cpm` and `filtering / tss_min_samples`
 
 Signal-based filter applied after quantification and before TMM normalization. A TSS is kept in `tss.final.bed` only if its CPM (counts per million library-size reads, without TMM) is ≥ `tss_min_cpm` in at least `tss_min_samples` csRNA samples. Defaults are `tss_min_cpm: 0` and `tss_min_samples: 1`, which keep all TSSs. Example to require ≥ 1 CPM in ≥ 2 samples:
@@ -208,11 +279,13 @@ changing it re-runs the `tss_size_composition` rule.
 | `qc_initial_tss` | Calculate FRiP, nuclear read %, csRNA enrichment, miRNA depletion, and phosphorylation efficiency. Samples with FRiP < `min_cs_frip` or nuclear % < `min_pct_nuclear` are flagged as FAIL. |
 | `collect_consensus_tss` | Build the consensus TSS set (`tss.consensus.bed`) from csRNA samples, requiring detection in at least `tss_min_reps` replicates. TSSs narrower than 150 bp are padded; overlapping TSSs are split. TSSs overlapping miRNA / pre-tRNA loci (if `qc / mirnas` and `qc / trnas` are set) are removed. |
 | `quantify_final_tss` | HOMER quantification of the consensus TSSs in all csRNA libraries. |
-| `tss_size_composition` | Per-cluster read counts, small-RNA-sized read counts and top-lengths concentration from the tag directories, written to `tss.consensus.sizes.txt`. Reads nothing when both size filters are off. |
+| `tss_size_composition_library` | Per-cluster read counts, small-RNA-sized read counts and top-1..N length concentration for one csRNA library, from its tag directory. One job per library, so Snakemake runs them in parallel. Reads nothing when both size filters are off. |
+| `tss_size_composition` | Joins the per-library tables into `tss.consensus.sizes.txt`. |
 | `normalize_tss_quantification` | CPM filter (drop TSSs below `filtering / tss_min_cpm` in fewer than `filtering / tss_min_samples` csRNA samples), then the two read-size composition filters (`filtering / tss_srna_sizes` and `filtering / tss_max_top_sizes_fraction`), then TMM normalization (edgeR `TMMwsp`) of the retained counts. Writes the filtered set as `tss.final.bed`. All of these default to no-ops, keeping every TSS. |
 | `quantify_final_in_tss` | HOMER quantification of the filtered `tss.final.bed` in all input libraries. Used by the final QC step. |
 | `qc_final_tss` | Compute FRiP, csEnrichment, replicate correlations, and TSS detection rate on the filtered `tss.final.bed`. Writes `qc/qc_final_cs.txt` and `qc/qc_final_in.txt`. |
 | `generate_normalized_bw` | Multiply raw bedGraphs by RPM scale factors and export as bigWig. Small RNA regions can optionally be masked. |
+| `run_info` | Write `run_info.txt`: pipeline version and git commit, host, resolved config, sample-table checksum, and the version of every tool the run used. |
 
 ## Output Files
 
@@ -221,7 +294,8 @@ All outputs land in `files / output_dir` (default: `results/`):
 | File | Description |
 |------|-------------|
 | `tss.consensus.bed` | Unfiltered consensus TSS set (before CPM filter). |
-| `tss.consensus.sizes.txt` | Per csRNA library and cluster: total reads (`.reads`), reads in `tss_srna_sizes` (`.srna`), and reads in the cluster's `tss_top_sizes_n` commonest lengths (`.topn`). Cluster names only when both size filters are off. |
+| `tss.consensus.sizes.txt` | Per csRNA library and cluster: total reads (`.reads`), reads in `tss_srna_sizes` (`.srna`), and reads in the cluster's 1..`tss_top_sizes_max` commonest lengths (`.top1` … `.topN`). All n are precomputed so `tss_top_sizes_n` can be retuned without re-reading the tag directories. Cluster names only when both size filters are off. |
+| `run_info.txt` | Provenance for the run: pipeline version and commit, host, tool versions, sample-table checksum and the fully resolved config. |
 | `tss.final.bed` | Filtered consensus TSS coordinates (BED6). With default `tss_min_cpm: 0` and `tss_srna_sizes: []` this equals `tss.consensus.bed`. |
 | `tss.final.raw.txt` | Raw tag counts per TSS per csRNA sample (filtered set only). |
 | `tss.final.cpm.txt` | TMM-normalized CPM counts. |
@@ -262,4 +336,34 @@ The `qc_initial_cs.txt` / `qc_initial_in.txt` tables contain the columns below. 
 | `NFilteredTSS` | (`qc_final_*` only) Number of TSSs dropped by the CPM filter. |
 | `MinReplCorrSpearman` | Minimum Spearman correlation between this sample's TSS counts and any other csRNA replicate of the same `sample_name`. `NA` when only one replicate exists. Sharp drops (e.g. < 0.9) flag sample swaps or replicate dropouts. csRNA samples only. |
 | `MinReplCorrPearson` | Same as above but Pearson correlation on log1p-transformed counts. |
+
+### Reading these numbers, and what they do not mean
+
+Four things about this table mislead people, including the person who wrote most of it.
+
+**The same column name means different regions in the two files.** `csRiP`, `csFRiP` and
+`csEnrichment` are computed against the initial merged TSS set in `qc_initial_*.txt` and
+against `tss.final.bed` in `qc_final_*.txt`. Both are correct; they are just not the same
+measurement, so never join or compare the two files column-by-column.
+
+**The contamination percentages are signal-relative, not library-relative.** `PretRNAPct`
+and `miRNAPct` are both contaminant reads over contaminant plus reads-in-TSS, so they answer
+"per read I care about, how much junk", not "what fraction of the library is junk". The
+library-fraction version is smaller by roughly the csFRiP factor, which is itself lower in
+worse libraries, so a contaminated library looks somewhat worse on these than a
+library-fraction metric would show.
+
+**A high duplicate rate is not automatically bad, and a low one is not automatically good.**
+Duplication at matched depth is complexity convolved with concentration: reads pile up where
+the signal is, so a library that puts more of its reads into TSSs duplicates more at the same
+depth. On one Arabidopsis panel the *least* duplicated library was among the two worst by
+every other measure, because its reads were scattered over degradation background. If you
+want complexity, compare distinct positions at a matched depth restricted to real promoters.
+
+**`csEnrichment` is not a reliable discriminator at these group sizes.** On a panel of two to
+three libraries per condition it could not separate 1.97 from 2.00 for a treatment that
+demonstrably changed the libraries. The metrics that did separate consistently were
+`PretRNAPct`, `PhosEfficiency`, alignment survival and the useful-read fraction. Power
+comparisons on those.
+
 | `Status` | `Ok` or `FAIL` based on `min_cs_frip` and `min_pct_nuclear` thresholds. |

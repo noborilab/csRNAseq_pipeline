@@ -210,6 +210,68 @@ properties:
                   Extra arguments passed to findcsRNATSS.pl.
                   -includeSingleExons retains TSSs on single-exon genes
                   that HOMER would otherwise filter.
+              gtf:
+                type: string
+                default: ""
+                description: >
+                  Optional gene annotation GTF passed to HOMER as -gtf. Without
+                  it (and without a HOMER genome that carries its own
+                  annotation) HOMER cannot build the annotated-TSS / exon
+                  true-positive and false-positive sets it uses to choose the
+                  enrichment threshold per library, and silently falls back to
+                  default_log2_fold; the promoter-distal and stable-transcript
+                  columns are then written as placeholders (100.00% / 0.00%).
+                  Supplying a GTF is the single largest quality lever available
+                  here, but it changes TSS calls, so compare against your
+                  existing consensus before adopting it. Empty means no
+                  annotation, which is the previous behaviour.
+              rnaseq_tagdir:
+                type: string
+                default: ""
+                description: >
+                  Optional RNA-seq HOMER tag directory passed as -rna. Lets HOMER
+                  run its stable-transcript filter, which removes putative TSSs
+                  that look like processed or exonic RNA rather than initiation.
+                  Empty disables it, which is the previous behaviour.
+              program:
+                type: string
+                enum: ["findcsRNATSS.pl", "findcsRNATSR.pl"]
+                default: "findcsRNATSS.pl"
+                description: >
+                  Which HOMER TSS caller to run. findcsRNATSS.pl prints "this
+                  program is a legacy placeholder - please use findcsRNATSR.pl
+                  instead", and the two are the same program: their tables are
+                  identical (verified on a 34,891-cluster library, zero differing
+                  rows), differing only in output file names and labels, which
+                  this pipeline normalises. The default stays on the legacy name
+                  because findcsRNATSR.pl ships with an unpatched "use lib"
+                  pointing at the author's own install, so it resolves
+                  HomerConfig only when HOMER's bin directory is on PERL5LIB.
+                  Check that inside your container before switching.
+              pseudo_count:
+                type: number
+                default: 1.0
+                description: >
+                  HOMER -pseudoCount: normalised reads added to both sides of the
+                  enrichment ratio. This is what lets a cluster with zero input
+                  coverage pass automatically, since log2((cs+1)/(0+1)) is large
+                  by construction. Raise it to demand real input coverage before
+                  believing an enrichment. Default matches HOMER's own.
+              default_log2_fold:
+                type: number
+                default: 1
+                description: >
+                  HOMER -defaultLog2Fold: the enrichment threshold used when the
+                  annotation-based threshold calculation cannot run, which is the
+                  case whenever no GTF or annotated genome is supplied. With no
+                  annotation this is therefore the threshold that is actually in
+                  force. Default matches HOMER's own (2-fold).
+              local_fold:
+                type: number
+                default: 2
+                description: >
+                  HOMER -L: local fold enrichment required during initial TSS
+                  identification. Default matches HOMER's own.
           required:
             - genome
     required:
@@ -370,6 +432,30 @@ properties:
           population that a 20-80 nt library shows plainly). Raise it to demand
           agreement across libraries. Gates both size-composition filters
           (tss_srna_sizes and tss_max_top_sizes_fraction).
+      exclude_failed_from_consensus:
+        type: boolean
+        default: False
+        description: >
+          Drop csRNA libraries whose initial QC Status is FAIL (csFRiP below
+          min_cs_frip or nuclear percentage below min_pct_nuclear) from the
+          consensus TSS union. Default False, which keeps the previous behaviour
+          of building the union from every csRNA library regardless of QC. Worth
+          enabling because the union is a union: a contaminated library injects
+          its own spurious clusters into the shared set, and everything
+          downstream then quantifies them. A warning is printed either way when a
+          FAIL library contributes.
+      tss_top_sizes_max:
+        type: integer
+        minimum: 1
+        default: 5
+        description: >
+          Highest n for which the tss_size_composition rule precomputes the
+          top-n read-length share. tss_top_sizes_n can then be retuned anywhere
+          in 1..this without re-reading the tag directories. Raising it costs one
+          extra column per library per n; a full per-cluster length histogram
+          would be exact for any n but runs to tens of millions of rows on a
+          plant-sized dataset, which is why only the cumulative top-n sums are
+          kept.
       mask_srnas_from_bw:
         type: boolean
         default: True

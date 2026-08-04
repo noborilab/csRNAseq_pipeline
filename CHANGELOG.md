@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-04
+
+### Added
+- `program/homer/tss/gtf`: optional gene annotation passed to HOMER as `-gtf`.
+  Without it HOMER cannot build the annotated-TSS and exon sets it uses as true and
+  false positives to choose each library's enrichment threshold, so it falls back to
+  `-defaultLog2Fold` and writes the promoter-distal and stable-transcript columns as
+  placeholders (100.00% / 0.00%). Optional and empty by default, because the pipeline
+  must keep working without an annotation, but it is the largest single quality lever
+  in the configuration. Setting it changes TSS calls, so compare against an existing
+  consensus before adopting it. `program/homer/tss/rnaseq_tagdir` likewise passes
+  `-rna`, enabling HOMER's stable-transcript filter.
+- `program/homer/tss/program`: choice of HOMER caller. `findcsRNATSS.pl` announces
+  itself as a legacy placeholder for `findcsRNATSR.pl`; the two are the same program
+  (81 diff lines, all renames and help text) and their tables are identical, verified
+  on a 34,891-cluster library with zero differing rows. The pipeline now normalises
+  TSR's `.tsr.txt` / `.alltsr.txt` names to the `.tss.txt` the rest of it expects. The
+  default stays on the legacy name because TSR ships an unpatched `use lib` pointing at
+  its author's install, so it only resolves `HomerConfig` when HOMER's bin is on
+  `PERL5LIB`.
+- `program/homer/tss/pseudo_count`, `default_log2_fold` and `local_fold` expose HOMER's
+  `-pseudoCount`, `-defaultLog2Fold` and `-L`, all defaulting to HOMER's own values.
+  `pseudo_count` is what lets a cluster with zero input coverage pass the enrichment
+  test automatically. `-cpu` is now passed so HOMER uses the threads the rule reserves.
+- `filtering/exclude_failed_from_consensus` (default False, so behaviour is unchanged):
+  drop csRNA libraries whose initial QC `Status` is FAIL from the consensus union. The
+  union is a union, so a contaminated library's spurious clusters otherwise enter the
+  shared set and everything downstream quantifies them. A warning naming the libraries
+  is printed either way.
+- `run_info.txt`: per-run provenance. Pipeline version and git commit (flagged when the
+  working tree is dirty), host, resolved config, sample-table checksum, and the version
+  of every tool the run used.
+- Golden-value regression test. `tests/data/golden/qc_final_*.txt` are compared
+  value-by-value after the default e2e run, so a metric changing silently now fails the
+  suite; the structural assertions never noticed such changes. Refresh deliberately with
+  `tests/scripts/update_golden.sh <e2e outdir>`. Skipped for the per-aligner runs, where
+  a different aligner could legitimately shift values.
+
+### Changed
+- `tss_size_composition` is split into a per-library rule and a join, so Snakemake runs
+  the tag-directory pass for each library in parallel instead of looping over them in
+  one job.
+- `tss.consensus.sizes.txt` now carries `.top1` … `.topN` up to the new
+  `filtering/tss_top_sizes_max` (default 5) instead of a single `.topn`, so
+  `tss_top_sizes_n` can be retuned anywhere in that range without re-reading the tag
+  directories. Keeping the full per-cluster length histogram would serve any n exactly
+  but runs to roughly 2.8M rows per library on a plant-sized dataset, against a handful
+  of columns here.
+- Documented what the QC table does not mean: that `csFRiP` and friends measure
+  different regions in the initial and final tables, that the contamination percentages
+  are signal-relative rather than library-relative, that a high duplicate rate can mean
+  a *better* library because concentrated reads duplicate more, and that `csEnrichment`
+  could not separate 1.97 from 2.00 at two to three libraries per arm.
+
 ## [0.7.0] - 2026-08-04
 
 ### Fixed

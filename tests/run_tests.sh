@@ -97,8 +97,9 @@ run_validate() {
         trim align make_tagdir find_tss_initial make_raw_bedgraph
         gather_stats merge_initial_tss
         quantify_initial_cs_tss quantify_initial_in_tss qc_initial_tss
-        collect_consensus_tss quantify_final_tss tss_size_composition
-        normalize_tss_quantification
+        collect_consensus_tss quantify_final_tss
+        tss_size_composition_library tss_size_composition
+        normalize_tss_quantification run_info
         quantify_final_in_tss qc_final_tss generate_normalized_bw
     )
     local missing=()
@@ -211,6 +212,24 @@ run_unit_smk() {
         python tests/e2e/unit_assertions.py normalize "$tmp7" --expect-kept 8 || rc=1
     fi
 
+    if [[ "$rule_name" == "collect_consensus" ]]; then
+        # condB_csrna1 is FAIL in the QC fixture and is the only library seeing TSS_7, so
+        # the union has 7 clusters by default and 6 with failed libraries excluded.
+        python tests/e2e/unit_assertions.py collect_consensus "$tmp" --expect-clusters 7 || rc=1
+        local tmp9 cfg9
+        tmp9=$(mktemp -d)
+        cfg9=$(make_cfg "$tmp9" "$tmp9" "$tmp9/index/genome.fa" --exclude-failed)
+        trap "rm -rf $tmp9 $cfg9" EXIT
+        echo ""
+        echo "--- collect_consensus (exclude_failed_from_consensus) ---"
+        snakemake -s "$smk" \
+            --configfile "$cfg9" \
+            --config "test_outdir=$tmp9" \
+            --cores 1 \
+            --quiet 2>&1 || rc=1
+        python tests/e2e/unit_assertions.py collect_consensus "$tmp9" --expect-clusters 6 || rc=1
+    fi
+
     if [[ "$rule_name" == "size_composition" ]]; then
         local tmp5 cfg5
         tmp5=$(mktemp -d)
@@ -303,7 +322,7 @@ run_aligner_e2e() {
         -s workflow/Snakefile \
         --configfile "$cfg" \
         2>&1
-    python tests/e2e/assertions.py "$tmp"
+    python tests/e2e/assertions.py "$tmp" --skip-golden
 }
 
 # ── dispatch ──────────────────────────────────────────────────────────────────

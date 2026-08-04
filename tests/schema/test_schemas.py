@@ -134,6 +134,37 @@ class TestConfigSchema:
         with pytest.raises(Exception):
             validate(cfg, CONFIG_SCHEMA)
 
+    def test_tss_annotation_and_program_keys_accepted(self):
+        """The optional GTF, RNA-seq tagdir, program choice and HOMER knobs validate."""
+        from snakemake.utils import validate
+        with open(os.path.join(REPO, "tests", "data", "config.yaml")) as fh:
+            cfg = yaml.safe_load(fh)
+        cfg["program"]["homer"]["tss"]["gtf"] = "tests/data/genome.fa"
+        cfg["program"]["homer"]["tss"]["rnaseq_tagdir"] = "tests/data"
+        cfg["program"]["homer"]["tss"]["program"] = "findcsRNATSR.pl"
+        cfg["program"]["homer"]["tss"]["pseudo_count"] = 3
+        cfg["program"]["homer"]["tss"]["default_log2_fold"] = 2
+        cfg["program"]["homer"]["tss"]["local_fold"] = 4
+        validate(cfg, CONFIG_SCHEMA)
+
+    def test_tss_program_rejects_unknown(self):
+        """Only the two known HOMER callers are accepted."""
+        from snakemake.utils import validate
+        with open(os.path.join(REPO, "tests", "data", "config.yaml")) as fh:
+            cfg = yaml.safe_load(fh)
+        cfg["program"]["homer"]["tss"]["program"] = "findPeaks"
+        with pytest.raises(Exception):
+            validate(cfg, CONFIG_SCHEMA)
+
+    def test_consensus_qc_gate_and_top_max_accepted(self):
+        """exclude_failed_from_consensus and tss_top_sizes_max validate."""
+        from snakemake.utils import validate
+        with open(os.path.join(REPO, "tests", "data", "config.yaml")) as fh:
+            cfg = yaml.safe_load(fh)
+        cfg["filtering"]["exclude_failed_from_consensus"] = True
+        cfg["filtering"]["tss_top_sizes_max"] = 8
+        validate(cfg, CONFIG_SCHEMA)
+
     def test_max_top_sizes_fraction_is_bounded(self):
         """tss_max_top_sizes_fraction above 1 must fail validation."""
         from snakemake.utils import validate

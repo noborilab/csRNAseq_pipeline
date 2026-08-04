@@ -1,4 +1,5 @@
 import os
+import sys
 from os.path import abspath
 from pathlib import Path
 import pandas as pd
@@ -78,8 +79,35 @@ if config["program"]["bfqutils"]["use_pigz"]:
     if PIGZ_THREADS == 0:
         PIGZ_THREADS = 1
 
+try:
+    PIPELINE_VERSION = (Path(workflow.basedir).parent / "VERSION").read_text().strip()
+except OSError:
+    PIPELINE_VERSION = "unknown"
+
 INTERMEDIATE_DIR = abspath(config["files"]["intermediate_dir"])
 OUTPUT_DIR = abspath(config["files"]["output_dir"])
+
+# Optional annotation for TSS calling. Without a GTF (or a HOMER genome that carries its
+# own annotation) findcsRNATSS cannot build the annotated-TSS / exon true-positive and
+# false-positive sets it uses to pick the enrichment threshold, and silently falls back to
+# -defaultLog2Fold; it also cannot fill in the promoter-distal and stable-transcript
+# columns, which are then written as placeholders. Optional because the pipeline must keep
+# working for organisms with no annotation to hand.
+TSS_GTF = (config["program"]["homer"]["tss"].get("gtf") or "").strip()
+TSS_RNA_TAGDIR = (config["program"]["homer"]["tss"].get("rnaseq_tagdir") or "").strip()
+if TSS_GTF and not os.path.exists(TSS_GTF):
+    sys.exit(f"ERROR: program/homer/tss/gtf does not exist: {TSS_GTF!r}")
+if TSS_RNA_TAGDIR and not os.path.isdir(TSS_RNA_TAGDIR):
+    sys.exit(
+        f"ERROR: program/homer/tss/rnaseq_tagdir is not a directory: {TSS_RNA_TAGDIR!r}"
+    )
+
+# findcsRNATSS.pl announces itself as a legacy placeholder for findcsRNATSR.pl. The two
+# are the same program (81 diff lines, all renames and help text) and produce identical
+# tables, so switching is safe, but TSR ships with an unpatched "use lib" pointing at the
+# author's own install, so it only resolves HomerConfig when HOMER's bin directory is on
+# PERL5LIB. The default therefore stays on the legacy name.
+TSS_PROGRAM = config["program"]["homer"]["tss"].get("program", "findcsRNATSS.pl")
 
 
 def index_sentinel(aln, index):
@@ -250,6 +278,7 @@ rule all:
         OUTPUT_DIR + "/tss.final.raw.txt",
         OUTPUT_DIR + "/tss.final.cpm.txt",
         OUTPUT_DIR + "/norm_factors.txt",
+        OUTPUT_DIR + "/run_info.txt",
         expand(
             OUTPUT_DIR + "/bw/{sample_cs}.rpm.pos.bw",
             sample_cs=sampletab["id"][sampletab["sample_type"] == "csrna"],
@@ -497,6 +526,8 @@ rule find_tss_initial:
         match=lambda wildcards: OUTPUT_DIR
         + "/tagdir/"
         + get_matching_sample(wildcards.sample),
+        gtf=TSS_GTF if TSS_GTF else [],
+        rna=TSS_RNA_TAGDIR if TSS_RNA_TAGDIR else [],
     shadow:
         "minimal"
     output:
@@ -511,22 +542,44 @@ rule find_tss_initial:
         mem_mb=8000,
     params:
         prefix=OUTPUT_DIR + "/tss/{sample}",
+        prog=TSS_PROGRAM,
+        # findcsRNATSR.pl names its outputs .tsr.txt / .alltsr.txt where the legacy
+        # findcsRNATSS.pl uses .tss.txt / .alltss.txt. The table contents are identical
+        # (verified on a 34,891-cluster library: zero differing rows), so the rule just
+        # renames TSR's output to the .tss.txt the rest of the pipeline expects.
+        called=("tsr" if TSS_PROGRAM == "findcsRNATSR.pl" else "tss"),
         genome=config["program"]["homer"]["genome"],
         size=config["program"]["homer"]["tss"]["size"],
         ntags=config["program"]["homer"]["tss"]["ntagthreshold"],
         opt=config["program"]["homer"]["tss"]["extra_args"],
+        gtf=(f"-gtf {TSS_GTF}" if TSS_GTF else ""),
+        rna=(f"-rna {TSS_RNA_TAGDIR}" if TSS_RNA_TAGDIR else ""),
+        pseudo=config["program"]["homer"]["tss"]["pseudo_count"],
+        deffold=config["program"]["homer"]["tss"]["default_log2_fold"],
+        localfold=config["program"]["homer"]["tss"]["local_fold"],
     shell:
         """
-            findcsRNATSS.pl {input.sample} -i {input.match} \
+            {params.prog} {input.sample} -i {input.match} \
                 -o {params.prefix} -genome {params.genome} \
-                -size {params.size} -ntagThreshold {params.ntags} {params.opt} > {log} 2>&1 || true
+                -size {params.size} -ntagThreshold {params.ntags} \
+                -pseudoCount {params.pseudo} -defaultLog2Fold {params.deffold} \
+                -L {params.localfold} -cpu {threads} \
+                {params.gtf} {params.rna} {params.opt} > {log} 2>&1 || true
+            if [[ "{params.called}" != "tss" && -f {params.prefix}.{params.called}.txt ]]; then
+                mv {params.prefix}.{params.called}.txt {output.tss}
+                for suffix in all{params.called}.txt {params.called}.txt.freq.tsv; do
+                    [[ -f {params.prefix}.$suffix ]] && \
+                        mv {params.prefix}.$suffix \
+                           {params.prefix}.$(echo $suffix | sed 's/{params.called}/tss/') || true
+                done
+            fi
             if [[ -f {output.tss} ]]; then
                 pos2bed.pl -o {output.bed} {output.tss} 2>> {log}
             else
                 # Keep going so one bad library does not stall the run, but say so loudly:
                 # an empty BED silently drops this library from the consensus union, and
                 # the only other symptom is a confusing bedtools error further downstream.
-                echo "WARNING: findcsRNATSS.pl produced no TSSs for {wildcards.sample}; writing an empty TSS set. This library will not contribute to the consensus. See {log}" | tee -a {log} >&2
+                echo "WARNING: {params.prog} produced no TSSs for {wildcards.sample}; writing an empty TSS set. This library will not contribute to the consensus. See {log}" | tee -a {log} >&2
                 touch {output.tss} {output.bed}
             fi
         """
@@ -764,6 +817,7 @@ rule collect_consensus_tss:
             for s in sampletab["id"][sampletab["sample_type"] == "csrna"]
         ),
         tss_in=OUTPUT_DIR + "/tss_merged/all_in.tss_merged.bed",
+        qc_cs=OUTPUT_DIR + "/qc/qc_initial_cs.txt",
     output:
         OUTPUT_DIR + "/tss.consensus.bed",
     benchmark:
@@ -781,6 +835,7 @@ rule collect_consensus_tss:
         chrom_sizes=config["chrom_sizes"],
         mirnas=config.get("qc", {}).get("mirnas") or "",
         trnas=config.get("qc", {}).get("trnas") or "",
+        exclude_failed=config["filtering"].get("exclude_failed_from_consensus", False),
     script:
         "scripts/collect_consensus_tss.R"
 
@@ -812,13 +867,35 @@ rule quantify_final_tss:
         """
 
 
-rule tss_size_composition:
+rule tss_size_composition_library:
     message:
-        "Measuring the read-size composition of consensus TSSs"
+        "Measuring read-size composition of consensus TSSs in {wildcards.sample_cs}"
     input:
         bed=OUTPUT_DIR + "/tss.consensus.bed",
-        td=list(
-            (OUTPUT_DIR + "/tagdir/") + s
+        td=OUTPUT_DIR + "/tagdir/{sample_cs}",
+    output:
+        temp(OUTPUT_DIR + "/tss_sizes/{sample_cs}.sizes.txt"),
+    benchmark:
+        OUTPUT_DIR + "/qc/{sample_cs}.tss_size_composition.benchmark.txt",
+    resources:
+        mem_mb=4000,
+    params:
+        srna_sizes=" ".join(
+            str(int(x)) for x in config["filtering"].get("tss_srna_sizes", []) or []
+        ),
+        top_sizes_max=config["filtering"].get("tss_top_sizes_max", 5),
+        max_top_sizes_fraction=config["filtering"].get("tss_max_top_sizes_fraction", 1),
+    script:
+        "scripts/tss_size_composition.R"
+
+
+rule tss_size_composition:
+    message:
+        "Collecting read-size composition across libraries"
+    input:
+        bed=OUTPUT_DIR + "/tss.consensus.bed",
+        sizes=list(
+            (OUTPUT_DIR + "/tss_sizes/") + s + ".sizes.txt"
             for s in sampletab["id"][sampletab["sample_type"] == "csrna"]
         ),
     output:
@@ -826,15 +903,9 @@ rule tss_size_composition:
     benchmark:
         OUTPUT_DIR + "/qc/tss_size_composition.benchmark.txt",
     resources:
-        mem_mb=6000,
-    params:
-        srna_sizes=" ".join(
-            str(int(x)) for x in config["filtering"].get("tss_srna_sizes", []) or []
-        ),
-        top_sizes_n=config["filtering"].get("tss_top_sizes_n", 2),
-        max_top_sizes_fraction=config["filtering"].get("tss_max_top_sizes_fraction", 1),
+        mem_mb=4000,
     script:
-        "scripts/tss_size_composition.R"
+        "scripts/merge_size_composition.R"
 
 
 rule normalize_tss_quantification:
@@ -926,6 +997,38 @@ rule quantify_final_in_tss:
                 -strand + -fragLength 1 -raw -d {input.td} \
                 > {output} 2> {log}
         """
+
+
+rule run_info:
+    message:
+        "Recording run provenance"
+    input:
+        # Depends on the last outputs so the manifest reflects a finished run.
+        OUTPUT_DIR + "/tss.final.cpm.txt",
+        OUTPUT_DIR + "/qc_final_cs.txt",
+    output:
+        OUTPUT_DIR + "/run_info.txt",
+    resources:
+        mem_mb=500,
+    params:
+        repo=workflow.basedir + "/..",
+        version=PIPELINE_VERSION,
+        sample_table=config["sample_table"],
+        snakemake_version=snakemake.__version__,
+    run:
+        import json
+        import tempfile
+
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+            json.dump(dict(config), fh, indent=2, default=str)
+            dump = fh.name
+        shell(
+            "PIPELINE_VERSION={params.version:q} REPO_DIR={params.repo:q} "
+            "SAMPLE_TABLE={params.sample_table:q} SNAKEMAKE_VERSION={params.snakemake_version:q} "
+            "CONFIG_DUMP=" + dump + " OUT={output:q} "
+            "bash " + workflow.basedir + "/scripts/write_run_info.sh"
+        )
+        os.unlink(dump)
 
 
 rule qc_final_tss:

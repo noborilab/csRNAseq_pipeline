@@ -12,9 +12,12 @@ Arguments:
                   Without this flag, asserts they are equal (default no-op filter).
 """
 
+import csv
 import os
 import sys
 import argparse
+
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def fail(msg: str) -> None:
@@ -44,7 +47,62 @@ def check_file_nonempty(outdir: str, rel: str) -> None:
     check_exists_nonempty(os.path.join(outdir, rel), rel)
 
 
-def main(outdir: str, filter_pass: bool) -> None:
+def assert_golden_qc(outdir: str) -> None:
+    """Compare the QC tables against committed golden copies.
+
+    The rest of the suite checks structure: columns present, row counts, filter
+    arithmetic. None of it would notice a metric quietly changing value, which is the
+    failure mode most likely to mislead later. The synthetic run is deterministic, so
+    the tables should reproduce exactly on the same tool versions.
+
+    A mismatch is not automatically a bug: upgrading HOMER, bwa or bfqutils can shift
+    these legitimately. Inspect the diff, and if the new values are right, regenerate
+    with:
+
+        tests/scripts/update_golden.sh <e2e output dir>
+    """
+    for name in ("qc_final_cs.txt", "qc_final_in.txt"):
+        got_path = os.path.join(outdir, name)
+        exp_path = os.path.join(REPO, "tests", "data", "golden", name)
+        if not os.path.exists(exp_path):
+            fail(f"missing golden file {exp_path}")
+        with open(got_path) as fh:
+            got = list(csv.DictReader(fh, delimiter="\t"))
+        with open(exp_path) as fh:
+            exp = list(csv.DictReader(fh, delimiter="\t"))
+        if len(got) != len(exp):
+            fail(f"{name}: {len(got)} rows, golden has {len(exp)}")
+        if set(got[0]) != set(exp[0]):
+            only_new = sorted(set(got[0]) - set(exp[0]))
+            only_old = sorted(set(exp[0]) - set(got[0]))
+            fail(f"{name}: column set changed (added {only_new}, removed {only_old})")
+        by_sample_got = {r["Sample"]: r for r in got}
+        by_sample_exp = {r["Sample"]: r for r in exp}
+        if set(by_sample_got) != set(by_sample_exp):
+            fail(f"{name}: sample set changed")
+        drift = []
+        for sample, e in by_sample_exp.items():
+            g = by_sample_got[sample]
+            for col, want in e.items():
+                have = g[col]
+                if want == have:
+                    continue
+                try:
+                    w, h = float(want), float(have)
+                except ValueError:
+                    drift.append(f"{sample}/{col}: {want!r} -> {have!r}")
+                    continue
+                if w != w and h != h:      # both NaN
+                    continue
+                tol = 1e-6 * max(abs(w), 1.0)
+                if abs(w - h) > tol:
+                    drift.append(f"{sample}/{col}: {w:g} -> {h:g}")
+        if drift:
+            fail(f"{name}: {len(drift)} value(s) drifted from golden:\n    "
+                 + "\n    ".join(drift[:10]))
+        ok(f"{name} matches the golden copy ({len(exp)} rows, {len(exp[0])} columns)")
+
+def main(outdir: str, filter_pass: bool, skip_golden: bool = False) -> None:
     print(f"Checking outputs in: {outdir}")
 
     # Expected csRNA samples
@@ -164,6 +222,11 @@ def main(outdir: str, filter_pass: bool) -> None:
                  "expected no-op filter")
         ok(f"Default filter is no-op: {n_final} TSSs in both consensus and final")
 
+    # Golden comparison only on the default run: the filtered variant and the per-aligner
+    # runs legitimately produce different numbers.
+    if not filter_pass and not skip_golden:
+        assert_golden_qc(outdir)
+
     print("\nAll assertions passed.")
 
 
@@ -171,5 +234,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("outdir")
     parser.add_argument("--filter-pass", action="store_true")
+    parser.add_argument("--skip-golden", action="store_true",
+                        help="Skip the golden QC comparison. Used by the per-aligner runs, "
+                             "where a different aligner may legitimately shift values and a "
+                             "golden mismatch would be misread as a pipeline regression.")
     args = parser.parse_args()
-    main(args.outdir, args.filter_pass)
+    main(args.outdir, args.filter_pass, args.skip_golden)

@@ -1,0 +1,4 @@
+Sample	Status
+condA_csrna1	Ok
+condA_csrna2	Ok
+condB_csrna1	FAIL
