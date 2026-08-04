@@ -165,8 +165,10 @@ if (!is.null(mirna)) {
     stats_in[['miRNA']] <- colSums(quant_inTSS_input_m[quant_inTSS_input[[1]] %in% in_mirna, ])[stats_in[['Sample']]]
     stats_in_cs_miRNA <- colSums(quant_inTSS_input_m[quant_inTSS_input[[1]] %in% in_mirna, ])[stats_in_cs[['Sample']]]
     stats_cs[['miRNADepletion']] <- 1 / ((stats_cs[['miRNA']] / stats_cs[['NuclearReads']]) / (stats_in_cs_miRNA / stats_in_cs[['NuclearReads']]))
-    stats_cs[['miRNAPct']] <- stats_cs[['miRNA']] / stats_cs[['NuclearReads']] * 100
-    stats_in[['miRNAPct']] <- stats_in[['miRNA']] / stats_in[['NuclearReads']] * 100
+    # Same basis as PretRNAPct: contaminant reads as a share of contaminant plus
+    # reads-in-TSS, so the two contamination percentages are comparable.
+    stats_cs[['miRNAPct']] <- with(stats_cs, 100 * (miRNA / (miRNA + csRiP)))
+    stats_in[['miRNAPct']] <- with(stats_in, 100 * (miRNA / (miRNA + csRiP)))
 }
 
 stats_cs[['Status']] <- ifelse(stats_cs[['csFRiP']] > snakemake@config[["qc"]][["min_cs_frip"]] & stats_cs[['PctNuclear']] > snakemake@config[["qc"]][["min_pct_nuclear"]], 'Ok', 'FAIL')

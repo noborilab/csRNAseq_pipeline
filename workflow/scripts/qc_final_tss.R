@@ -44,6 +44,14 @@ quant_inTSS_cs_m <- read_homer_quant(snakemake@input[["quant_in_cs"]])
 quant_inTSS_in_m <- read_homer_quant(snakemake@input[["quant_in_in"]])
 
 # ── Metrics re-derived from the final csRNA TSS set ─────────────────────────
+#
+# Note on naming: in THIS file the csRiP / csFRiP / csEnrichment columns are computed
+# against tss.final.bed, whereas the identically named columns in qc_initial_*.txt are
+# computed against the initial merged TSS set.  The names are kept so that the same
+# column means "reads in the TSS set this file is about" in both, but that does mean the
+# two files must not be compared column-by-column as though they measured the same
+# regions.  Earlier versions also wrote FinalRiP / FinalFRiP / FinalEnrichment as literal
+# copies of these three; those aliases are gone.
 
 stats_cs[["csRiP"]]  <- colSums(quant_cs_m)[stats_cs[["Sample"]]]
 stats_in[["csRiP"]]  <- colSums(quant_in_m)[stats_in[["Sample"]]]
@@ -53,14 +61,8 @@ stats_cs[["csFRiP"]]    <- stats_cs[["csRiP"]]    / stats_cs[["NuclearReads"]]
 stats_in[["csFRiP"]]    <- stats_in[["csRiP"]]    / stats_in[["NuclearReads"]]
 stats_in_cs[["csFRiP"]] <- stats_in_cs[["csRiP"]] / stats_in_cs[["NuclearReads"]]
 
-stats_cs[["FinalRiP"]]    <- stats_cs[["csRiP"]]
-stats_in[["FinalRiP"]]    <- stats_in[["csRiP"]]
-stats_cs[["FinalFRiP"]]   <- stats_cs[["csFRiP"]]
-stats_in[["FinalFRiP"]]   <- stats_in[["csFRiP"]]
-
 stats_cs[["csRNACappedPct"]] <- 100 * stats_cs[["csFRiP"]]
 stats_cs[["csEnrichment"]]   <- stats_cs[["csFRiP"]] / stats_in_cs[["csFRiP"]]
-stats_cs[["FinalEnrichment"]] <- stats_cs[["csEnrichment"]]
 
 # ── Metrics re-derived from the input TSS set ────────────────────────────────
 # (input TSSs are unaffected by the CPM filter, but we re-derive here from
@@ -171,8 +173,10 @@ if (!is.null(mirna)) {
         (stats_cs[["miRNA"]] / stats_cs[["NuclearReads"]]) /
         (in_cs_mirna          / stats_in_cs[["NuclearReads"]])
     )
-    stats_cs[["miRNAPct"]] <- stats_cs[["miRNA"]] / stats_cs[["NuclearReads"]] * 100
-    stats_in[["miRNAPct"]] <- stats_in[["miRNA"]] / stats_in[["NuclearReads"]] * 100
+    # Same basis as PretRNAPct: contaminant reads as a share of contaminant plus
+    # reads-in-TSS, so the two contamination percentages are comparable.
+    stats_cs[["miRNAPct"]] <- with(stats_cs, 100 * (miRNA / (miRNA + csRiP)))
+    stats_in[["miRNAPct"]] <- with(stats_in, 100 * (miRNA / (miRNA + csRiP)))
 }
 
 # ── Remaining per-library metrics ────────────────────────────────────────────
@@ -183,7 +187,7 @@ stats_cs[["PctNuclear"]] <- 100 * (stats_cs[["NuclearReads"]] / stats_cs[["Total
 stats_in[["PctNuclear"]] <- 100 * (stats_in[["NuclearReads"]] / stats_in[["TotalReads"]])
 
 stats_cs[["Status"]] <- ifelse(
-    stats_cs[["FinalFRiP"]] > snakemake@config[["qc"]][["min_cs_frip"]] &
+    stats_cs[["csFRiP"]] > snakemake@config[["qc"]][["min_cs_frip"]] &
     stats_cs[["PctNuclear"]] > snakemake@config[["qc"]][["min_pct_nuclear"]],
     "Ok", "FAIL"
 )
@@ -194,5 +198,5 @@ readr::write_tsv(stats_in, snakemake@output[["qc_in"]])
 cat("Final TSS set: ", n_final, " of ", n_consensus,
     " consensus TSSs retained (", n_consensus - n_final, " filtered)\n", sep = "")
 cat("Printing summary stats:\n")
-print(cbind(stats_cs[, c("Sample", "Status", "PctNuclear", "FinalFRiP")],
-            FinalFRiP_in = stats_in_cs[["csFRiP"]]))
+print(cbind(stats_cs[, c("Sample", "Status", "PctNuclear", "csFRiP")],
+            csFRiP_in = stats_in_cs[["csFRiP"]]))

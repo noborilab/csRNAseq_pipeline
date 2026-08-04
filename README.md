@@ -230,7 +230,7 @@ All outputs land in `files / output_dir` (default: `results/`):
 | `bw/{sample}.rpm.neg.bw` | Reverse-strand RPM-normalized bigWig (scores are negative). |
 | `qc/qc_initial_cs.txt` | Per-sample QC metrics for csRNA libraries computed on the merged initial TSS set (FRiP, enrichment, etc.). |
 | `qc/qc_initial_in.txt` | Per-sample QC metrics for input libraries computed on the merged initial TSS set. |
-| `qc/qc_final_cs.txt` | Per-sample QC metrics for csRNA libraries re-derived from the filtered `tss.final.bed`. Contains the same columns as `qc_initial_cs.txt` plus the `Final*` and `NConsensusTSS`/`NFinalTSS`/`NFilteredTSS` columns. All metrics (FRiP, enrichment, contamination) are re-computed from raw counts, not copied from the initial QC. |
+| `qc/qc_final_cs.txt` | Per-sample QC metrics for csRNA libraries re-derived from the filtered `tss.final.bed`. Same columns as `qc_initial_cs.txt` plus `FinalTSSDetected`, `NConsensusTSS`, `NFinalTSS` and `NFilteredTSS`. All metrics are re-computed from raw counts, not copied from the initial QC, so `csRiP` / `csFRiP` / `csEnrichment` here refer to the **final** TSS set while the same names in `qc_initial_cs.txt` refer to the initial merged set. Do not compare the two files column-by-column. |
 | `qc/qc_final_in.txt` | Per-sample QC metrics for input libraries, augmented with `Final*` columns. |
 | `qc/replicate_correlation.txt` | Pairwise Spearman and Pearson correlations between csRNA replicates of the same `sample_name`, for both the initial TSS set (Stage=Initial) and the filtered set (Stage=Final). Empty if no `sample_name` has ≥ 2 replicates. |
 | `qc/stats_initial_cs.txt` | Raw alignment and tag-count statistics for csRNA libraries (TotalReads, OrganelleReads, PosReads, NegReads). |
@@ -241,7 +241,7 @@ All outputs land in `files / output_dir` (default: `results/`):
 
 ## QC Metrics
 
-The `qc_initial_cs.txt` / `qc_initial_in.txt` tables contain the columns below. `qc_final_cs.txt` / `qc_final_in.txt` contain the same columns plus the `Final*` / `NConsensusTSS` / `NFinalTSS` / `NFilteredTSS` columns, with all values re-derived from the filtered TSS set rather than copied from the initial QC:
+The `qc_initial_cs.txt` / `qc_initial_in.txt` tables contain the columns below. `qc_final_cs.txt` / `qc_final_in.txt` contain the same columns plus `FinalTSSDetected` / `NConsensusTSS` / `NFinalTSS` / `NFilteredTSS`, with all values re-derived from the filtered TSS set rather than copied from the initial QC. That means a column such as `csFRiP` measures the initial merged TSS set in the initial tables and the final set in the final tables, so the two files are not comparable column-by-column:
 
 | Column | Description |
 |--------|-------------|
@@ -250,13 +250,12 @@ The `qc_initial_cs.txt` / `qc_initial_in.txt` tables contain the columns below. 
 | `PctNuclear` | Percentage of reads mapping to nuclear chromosomes (i.e. excluding `qc / organelle_chroms`). |
 | `csEnrichment` | Ratio of csRNA FRiP to input FRiP, i.e. how enriched the capped initiation signal is relative to the background. |
 | `sDepletion` | Inverse ratio of small RNA signal between csRNA and input libraries. |
-| `PretRNAPct` | Fraction of input-TSS reads overlapping pre-tRNA loci (requires `qc / trnas`). |
+| `PretRNAPct` | Pre-tRNA reads as a percentage of pre-tRNA reads plus reads in TSSs, i.e. contaminant per unit of signal rather than per library read (requires `qc / trnas`). |
 | `PhosEfficiency` | Ratio of pre-tRNA depletion in csRNA vs input; a measure of 5′-phosphate removal efficiency. |
 | `miRNADepletion` | Ratio of miRNA depletion in csRNA vs input, an independent phosphorylation-efficiency metric (requires `qc / mirnas`). |
+| `miRNAPct` | miRNA reads as a percentage of miRNA reads plus reads in TSSs. Same basis as `PretRNAPct`, so the two contamination percentages are directly comparable. |
 | `StrandBalance` | Fraction of mapped reads on the + strand. Expect ~0.5 in csRNA libraries; large deviations flag adapter contamination, library-prep strand bias, or pile-ups at a few highly expressed loci. Looser bounds in input libraries since small-RNA biology is genuinely strand-skewed. |
 | `TSSDetected` | Fraction of merged-set TSSs with ≥ 1 tag in this library. Low values flag undersequenced libraries. |
-| `FinalFRiP` | (`qc_final_*` only) FRiP recomputed on `tss.final.bed`. |
-| `FinalEnrichment` | (`qc_final_cs.txt` only) csEnrichment recomputed on `tss.final.bed`. |
 | `FinalTSSDetected` | (`qc_final_*` only) Fraction of `tss.final.bed` TSSs with ≥ 1 tag in this library. |
 | `NConsensusTSS` | (`qc_final_*` only) Number of TSSs in `tss.consensus.bed` (before CPM filter). |
 | `NFinalTSS` | (`qc_final_*` only) Number of TSSs retained in `tss.final.bed` after CPM filter. |

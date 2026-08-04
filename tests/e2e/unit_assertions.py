@@ -180,7 +180,7 @@ def assert_qc_final(outdir: str) -> None:
     with open(qc_cs_path) as fh:
         hdr = fh.readline().strip().split("\t")
     for col in (
-        "FinalFRiP", "FinalEnrichment", "NConsensusTSS", "NFinalTSS", "NFilteredTSS",
+        "NConsensusTSS", "NFinalTSS", "NFilteredTSS", "FinalTSSDetected",
         "csRiP", "sRiP", "csFRiP", "sFRiP", "csRNACappedPct", "csEnrichment", "sDepletion",
         "group", "RawReads", "TrimmedReads",
     ):

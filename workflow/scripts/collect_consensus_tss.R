@@ -58,6 +58,27 @@ seqlevels(tss, pruning.mode = "coarse") <- intersect(valid_chroms, seqlevels(tss
 tss <- sort(tss)
 tss[width(tss) < 150] <- resize(tss[width(tss) < 150], 150, 'center')
 
+# Widening to 150 bp, and the shifting below, can push a cluster past either end of its
+# chromosome. Slide such clusters back inside instead of trimming them, so every cluster
+# keeps its width; a chromosome shorter than the cluster itself is left alone and reported.
+chrom_len <- setNames(as.numeric(cs$V2), as.character(cs$V1))
+nudge_into_chrom <- function(x) {
+  len <- chrom_len[as.character(seqnames(x))]
+  off <- ifelse(start(x) < 1, 1 - start(x),
+         ifelse(!is.na(len) & end(x) > len, len - end(x), 0))
+  off[is.na(off)] <- 0
+  ok <- is.na(len) | width(x) <= len
+  if (any(off != 0 & ok)) {
+    cat('Sliding ', sum(off != 0 & ok), ' cluster(s) back inside the chromosome bounds\n', sep = '')
+    x[off != 0 & ok] <- shift(x[off != 0 & ok], off[off != 0 & ok])
+  }
+  if (any(!ok)) {
+    cat('WARNING: ', sum(!ok), ' cluster(s) are wider than their chromosome and left as they are\n', sep = '')
+  }
+  x
+}
+tss <- nudge_into_chrom(tss)
+
 fix_ov_tss <- function(x) {
   wOv <- end(x[1]) - start(x[2])
   mvR <- wOv %/% 2
@@ -70,14 +91,18 @@ max_iter <- 100
 iter <- 0
 while (iter < max_iter) {
   tssOvs <- findOverlaps(tss, ignore.strand = FALSE)
-  tssOvs <- tssOvs[queryHits(tssOvs) != subjectHits(tssOvs)]
+  # Every overlap is reported twice, as (i,j) and (j,i). Keep one of each pair by index
+  # order: the previous "every other hit" form relied on the two members of a pair landing
+  # adjacent in the Hits object, which holds for equal-width sorted ranges but is not
+  # something findOverlaps promises.
+  tssOvs <- tssOvs[queryHits(tssOvs) < subjectHits(tssOvs)]
   if (!length(tssOvs)) break
-  tssOvs <- tssOvs[seq(1, length(tssOvs), by = 2)]
   cat('Adjusting ', length(tssOvs), ' overlapping TSS pair(s) (iteration ', iter + 1, ') ...\n', sep = '')
   for (i in seq_len(length(tssOvs))) {
     tss[c(queryHits(tssOvs)[i], subjectHits(tssOvs)[i])] <-
       fix_ov_tss(tss[c(queryHits(tssOvs)[i], subjectHits(tssOvs)[i])])
   }
+  tss <- nudge_into_chrom(tss)
   iter <- iter + 1
 }
 if (iter == max_iter) {

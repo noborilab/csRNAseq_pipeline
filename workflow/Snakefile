@@ -523,6 +523,10 @@ rule find_tss_initial:
             if [[ -f {output.tss} ]]; then
                 pos2bed.pl -o {output.bed} {output.tss} 2>> {log}
             else
+                # Keep going so one bad library does not stall the run, but say so loudly:
+                # an empty BED silently drops this library from the consensus union, and
+                # the only other symptom is a confusing bedtools error further downstream.
+                echo "WARNING: findcsRNATSS.pl produced no TSSs for {wildcards.sample}; writing an empty TSS set. This library will not contribute to the consensus. See {log}" | tee -a {log} >&2
                 touch {output.tss} {output.bed}
             fi
         """
@@ -620,6 +624,9 @@ rule merge_initial_tss:
         ),
         valid_chroms=" ".join(VALID_CHROMS),
     shell:
+        # The second sort is not redundant: "merge -s" emits merged records in the order it
+        # meets them, interleaving strands, and the awk below names TSSs by NR. Re-sorting
+        # first makes TSS_<n> follow coordinate order deterministically.
         """
             cat {params.in_cs} \
             | bedtools sort -i stdin \

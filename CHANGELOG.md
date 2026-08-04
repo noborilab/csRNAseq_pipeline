@@ -7,7 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `gather_stats.sh` summed organelle tag counts in bash integer arithmetic. HOMER
+  writes tag counts as floats, and any fractional total (multi-mapper weighting,
+  `bam2td -keepAll`) comes back from awk in `%.6g` scientific notation, which bash
+  rejects with "syntax error: invalid arithmetic operator", failing the rule. The
+  sum and rounding now happen inside awk.
+- `collect_consensus_tss.R` could place clusters outside their chromosome:
+  widening to 150 bp and the overlap-resolution shifts were unclamped and no
+  seqlengths were set, so a TSS near a chromosome end could be written to BED with
+  a negative start or a coordinate past the chromosome. Such clusters are now slid
+  back inside, preserving their width, and a cluster wider than its own chromosome
+  is left alone and reported.
+- `collect_consensus_tss.R` picked one of each symmetric overlap pair with
+  `seq(1, length(hits), by = 2)`, which assumes the two members of a pair land
+  adjacent in the `Hits` object. That holds for equal-width sorted ranges but is
+  not guaranteed, so it now selects on `queryHits < subjectHits`.
+- `tss_size_composition.R` built its per-(cluster, length) key in integer
+  arithmetic, which overflows silently to `NA` for a large genome sequenced with
+  long reads (roughly a million clusters and multi-kilobase reads). Now double.
+- A failed `findcsRNATSS.pl` call is no longer silent. The rule still writes an
+  empty TSS set so one bad library cannot stall a run, but it now says so on
+  stderr and in the log, because the only other symptom was the affected library
+  quietly vanishing from the consensus union and a confusing `bedtools` error
+  downstream.
+
 ### Changed
+- `qc_final_cs.txt` and `qc_final_in.txt` no longer carry `FinalRiP`, `FinalFRiP`
+  and `FinalEnrichment`. They were literal copies of `csRiP`, `csFRiP` and
+  `csEnrichment` in the same table. `FinalTSSDetected` stays, since it is a
+  distinct metric. Note the naming subtlety the duplication was hiding, now
+  documented in the README and in the script: in the final tables `csRiP` /
+  `csFRiP` / `csEnrichment` are computed against `tss.final.bed`, whereas the same
+  names in the initial tables are computed against the initial merged set, so the
+  two files must not be compared column-by-column.
+- `miRNAPct` now uses the same denominator as `PretRNAPct`, contaminant reads over
+  contaminant plus reads-in-TSS, instead of contaminant over nuclear reads. The two
+  contamination percentages are reported side by side and were on different bases,
+  differing by roughly the csFRiP factor. Values shift up by around 15% relative;
+  ratios between libraries are essentially unchanged.
 - Corrected the documented rationale for the small-RNA size filter (README,
   `tss_size_composition.R`, `normalize_tss_quantification.R`). It previously said
   enrichment over the input fails to reject siRNA clusters where the input is too

@@ -20,17 +20,22 @@ for i in "$@"; do
     printf "\t" >> "$OUT"
     grep "^genome=" "$OUT_PREFIX/$i/tagInfo.txt" | cut -f3 | tr -d '\n' >> "$OUT"
     printf "\t" >> "$OUT"
-    organelle_total=0
-    for chrom in $ORGANELLE_CHROMS; do
-        n=$(awk -v c="$chrom" 'index($0, c "\t") == 1 {sum += $3} END {print sum+0}' "$OUT_PREFIX/$i/tagInfo.txt")
-        organelle_total=$((organelle_total + n))
-    done
-    printf "%d\t" $organelle_total >> "$OUT"
+    # Summed and rounded inside awk, not in the shell: HOMER writes tag counts as floats,
+    # and a fractional total (multi-mapper weighting, bam2td -keepAll) comes back from awk
+    # in %.6g scientific notation, which bash integer arithmetic rejects outright with
+    # "syntax error: invalid arithmetic operator".
+    organelle_total=$(awk -F'\t' -v chroms="$ORGANELLE_CHROMS" '
+        BEGIN { n = split(chroms, a, /[[:space:]]+/)
+                for (k = 1; k <= n; k++) if (a[k] != "") want[a[k]] = 1 }
+        ($1 in want) { sum += $3 }
+        END { printf "%.0f", sum + 0 }' "$OUT_PREFIX/$i/tagInfo.txt")
+    printf "%s\t" "$organelle_total" >> "$OUT"
     awk '$1 == 0 {print $2}' "$OUT_PREFIX/$i/tagFreq.txt" | tr -d '\n' >> "$OUT"
     printf "\t" >> "$OUT"
-    # Sum raw read counts on each strand from the bedGraphs (negative strand
-    # values are stored as negative numbers by HOMER, so negate to recover the
-    # positive read count). Each bedGraph interval is value * (end - start) reads.
+    # Sum raw read counts on each strand from the bedGraphs. makeUCSCfile -raw writes
+    # positive values on both strands, so no sign handling is needed here; the negative
+    # values are introduced later, in generate_normalized_bw.R, for display only. Each
+    # bedGraph interval contributes value * (end - start) reads.
     gunzip -c "$bg_pos" | awk 'NF >= 4 && $2 ~ /^[0-9]+$/ {sum += $4 * ($3 - $2)} END {printf "%.0f", sum+0}' >> "$OUT"
     printf "\t" >> "$OUT"
     gunzip -c "$bg_neg" | awk 'NF >= 4 && $2 ~ /^[0-9]+$/ {sum += $4 * ($3 - $2)} END {printf "%.0f", sum+0}' >> "$OUT"

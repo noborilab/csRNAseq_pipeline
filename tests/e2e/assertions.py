@@ -101,7 +101,7 @@ def main(outdir: str, filter_pass: bool) -> None:
         reader = csv.DictReader(fh, delimiter="\t")
         header = reader.fieldnames or []
     for col in (
-        "FinalFRiP", "FinalEnrichment", "NConsensusTSS", "NFinalTSS", "NFilteredTSS",
+        "NConsensusTSS", "NFinalTSS", "NFilteredTSS", "FinalTSSDetected",
         "csRiP", "sRiP", "csFRiP", "sFRiP", "csRNACappedPct", "csEnrichment", "sDepletion",
         "miRNA", "miRNADepletion", "miRNAPct", "PretRNA", "PretRNAPct", "PhosEfficiency",
         "group", "RawReads", "TrimmedReads",

@@ -101,18 +101,21 @@ topn <- reads
 
 # Reads in a cluster's top `top_n` lengths, from per-(cluster, length) totals keyed as
 # row + (len - 1) * n_tss. Ranking within a cluster is a sort plus a within-group index,
-# so no per-cluster loop is needed.
+# so no per-cluster loop is needed. The key is built in double rather than integer
+# arithmetic: cluster count times read length exceeds the integer range for a large
+# genome sequenced with long reads (a million clusters and multi-kilobase reads), where
+# integer multiplication would silently return NA.
 top_share <- function(key, val) {
     agg <- rowsum(val, key)
-    k <- as.integer(rownames(agg)); v <- agg[, 1L]
-    row <- ((k - 1L) %% n_tss) + 1L
+    k <- as.numeric(rownames(agg)); v <- agg[, 1L]
+    row <- ((k - 1) %% n_tss) + 1
     o <- order(row, -v)
     row <- row[o]; v <- v[o]
     rank_in_row <- sequence(rle(row)$lengths)
     keep <- rank_in_row <= top_n
     out <- numeric(n_tss)
     agg2 <- rowsum(v[keep], row[keep])
-    out[as.integer(rownames(agg2))] <- agg2[, 1L]
+    out[as.numeric(rownames(agg2))] <- agg2[, 1L]
     out
 }
 
@@ -151,9 +154,9 @@ for (s in seq_along(tagdirs)) {
                 # Collapse to per-(cluster, length) totals now, so what is carried to the
                 # end of the sample stays small.
                 agg <- rowsum(tags$count[sel],
-                    row + (as.integer(tags$len[sel]) - 1L) * n_tss)
+                    row + (as.numeric(tags$len[sel]) - 1) * n_tss)
                 nchunk <- nchunk + 1L
-                len_keys[[nchunk]] <- as.integer(rownames(agg))
+                len_keys[[nchunk]] <- as.numeric(rownames(agg))
                 len_vals[[nchunk]] <- agg[, 1L]
             }
         }
