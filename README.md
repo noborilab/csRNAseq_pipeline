@@ -152,6 +152,52 @@ putative clusters passing the RNA check from 29 down to 17 passing both checks. 
 only for the stable-transcript columns; that is a good way to see how much it would remove
 before letting it remove anything.
 
+#### Building the RNA-seq tag directory
+
+Three steps, done once, outside the pipeline. Use the same genome as your csRNA run, and
+check that chromosome names match your `chrom_sizes`.
+
+```bash
+# 1. Align with a splice-aware aligner. STAR or HISAT2; not the pipeline's bwa-aln.
+STAR --genomeDir /path/to/star_index \
+     --readFilesIn rnaseq_R1.fq.gz rnaseq_R2.fq.gz --readFilesCommand zcat \
+     --outSAMtype BAM SortedByCoordinate --outFileNamePrefix rnaseq.
+# or:  hisat2 -x /path/to/hisat2_index -1 rnaseq_R1.fq.gz -2 rnaseq_R2.fq.gz \
+#        | samtools sort -o rnaseq.bam
+
+# 2. Build the tag directory, with the same tool the pipeline uses for csRNA.
+bam2td /path/to/rnaseq_tagdir rnaseq.Aligned.sortedByCoord.out.bam \
+    -genome /path/to/genome.fa
+# makeTagDirectory works equally well if you prefer it.
+```
+
+```yaml
+# 3. Point the config at it.
+program:
+  homer:
+    tss:
+      rnaseq_tagdir: "/path/to/rnaseq_tagdir"
+```
+
+**Get the strand right.** HOMER assumes a tag directory represents RNA in sense orientation,
+and the sense / antisense read densities are what the stable-transcript call rests on, so a
+flipped library makes those calculations meaningless rather than merely noisy. Most stranded
+protocols (dUTP) put read 1 antisense to the transcript. `bam2td` and `makeTagDirectory` both
+take `-flip` (flip everything) and `-sspe` (strand-specific paired-end: flip read 2). Rather
+than trusting a guess about your kit, build the directory, make a bigWig from it, and look at
+a few genes you know the orientation of: the coverage should sit on the transcript's own
+strand.
+
+Any RNA-seq alignment you already have works, as long as it is the same genome build and
+chromosome naming. There is no need for it to come from the same experiment, though matched
+tissue obviously makes the stability call more meaningful.
+
+**You lose little by skipping this.** The GTF alone gives the whole threshold-selection
+benefit: on the test data, `-gtf` on its own produces the same true and false positive sets
+(15 and 5) and the same chosen input threshold (0.415) as `-gtf` plus `-rna`. RNA-seq only
+adds the stable-transcript filter on top. So if you have an annotation but no RNA-seq, set
+`gtf` and leave `rnaseq_tagdir` empty.
+
 ### `program / homer / tss / program`, `pseudo_count`, `default_log2_fold`, `local_fold`
 
 `findcsRNATSS.pl` prints *"this program is a legacy placeholder - please use
