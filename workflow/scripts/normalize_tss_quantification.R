@@ -36,8 +36,11 @@ cat("CPM filter: kept ", sum(keep), " of ", length(keep), " consensus TSSs\n", s
 #
 #   1. Small-RNA sizes (filtering.tss_srna_sizes, in plants the 21-25 nt siRNAs).  Those
 #      species are uncapped but survive the enzymatic depletion well enough to be called
-#      as TSS clusters, and enrichment over the input cannot reject them where the input
-#      has too little coverage to measure a background.
+#      as TSS clusters.  Enrichment over the input holds them off while the csRNA library
+#      is clean and degrades as the library degrades, since a library that has lost its
+#      capped signal is proportionally richer in siRNA than its own input: measured on
+#      Arabidopsis, 1% of siRNA-dominated clusters clear a 2-fold enrichment filter in a
+#      good library against 61% in the worst.  Read size does not degrade that way.
 #   2. Top-n lengths (filtering.tss_max_top_sizes_fraction), whatever those lengths are.
 #      Genuine initiation is heterogeneous: a promoter yields reads across tens of
 #      lengths, so its two commonest lengths hold only a fifth or so of it.  A discretely

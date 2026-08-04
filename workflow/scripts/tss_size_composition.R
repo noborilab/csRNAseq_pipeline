@@ -11,10 +11,11 @@ suppressWarnings(suppressMessages(suppressPackageStartupMessages(library(rtrackl
 #
 # Why the measurement is worth making: abundant uncapped small RNAs (in plants the
 # 21-25 nt siRNAs, above all the 24 nt Pol IV class over transposons) survive the
-# enzymatic depletion well enough to be called as TSS clusters, and enrichment over
-# the input library cannot reject them when the input is shallow.  Their read size
-# gives them away, because a genuine capped RNA population is not concentrated in a
-# single small size class.
+# enzymatic depletion well enough to be called as TSS clusters, and enrichment over the
+# input library stops rejecting them once the csRNA library degrades, because a library
+# that has lost its capped signal is proportionally richer in siRNA than its own input.
+# Read size gives them away either way, because a genuine capped RNA population is not
+# concentrated in a single small size class.
 #
 # Clusters never overlap within a strand (collect_consensus_tss.R resolves every
 # overlap before writing tss.consensus.bed), so a read's 5' position identifies its

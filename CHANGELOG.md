@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.6.0] - 2026-08-04
+### Changed
+- Corrected the documented rationale for the small-RNA size filter (README,
+  `tss_size_composition.R`, `normalize_tss_quantification.R`). It previously said
+  enrichment over the input fails to reject siRNA clusters where the input is too
+  shallow to measure a background. Measured properly, shallow input is a minor
+  sub-mode: across the whole population of siRNA-dominated clusters only 1-2% have
+  zero input coverage, and a 2-fold enrichment filter rejects 99% of them in a good
+  library. What the filter really guards against is loss of library quality, since a
+  library that has lost its capped signal is proportionally richer in siRNA than its
+  own input: siRNA-dominated clusters clearing the enrichment filter run 1% in a good
+  Arabidopsis library, 7% without the AP phosphatase and 61% in the worst library of
+  the panel. Read size does not degrade that way. Documentation only, no behaviour
+  change.
 
 ### Added
 - Top-lengths filter, a second read-size composition filter that needs no prior

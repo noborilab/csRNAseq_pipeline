@@ -121,10 +121,15 @@ filtering:
 
 Abundant uncapped small RNAs are the one contaminant the other filters cannot
 reach. In plants the 21-25 nt siRNAs, above all the 24 nt Pol IV class over
-transposons, survive TEX/AP well enough to be called as TSS clusters, and
-enrichment over the input cannot reject them wherever the input library has too
-little coverage to measure a local background. Their read length gives them
-away, because genuine initiation is not confined to one small size class.
+transposons, survive the enzymatic depletion well enough to be called as TSS
+clusters. Enrichment over the input holds them off while the csRNA library is
+clean, but it degrades as the library degrades, because a library that has lost
+its capped signal is proportionally richer in siRNA than its own input is.
+Measured on Arabidopsis, the share of siRNA-dominated clusters passing a 2-fold
+enrichment filter runs 1% in a good library, 7% without the AP phosphatase, and
+61% in the worst library in the panel. Read length is the signal that does not
+degrade with the library, because genuine initiation is never confined to one
+small size class.
 
 List the contaminating read lengths in `tss_srna_sizes`, and a TSS is dropped
 from `tss.final.bed` when more than `tss_max_srna_fraction` of its reads fall in
