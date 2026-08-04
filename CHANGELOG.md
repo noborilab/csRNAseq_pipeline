@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-04
+
+### Added
+- Top-lengths filter, a second read-size composition filter that needs no prior
+  knowledge of which lengths are contaminating. `tss_max_top_sizes_fraction`
+  (default 1, disabled) drops a TSS cluster when more than that fraction of its
+  reads fall in its `tss_top_sizes_n` (default 2) commonest read lengths.
+  Genuine initiation is heterogeneous, spreading over tens of lengths, while a
+  discretely processed RNA with fixed 5' and 3' ends puts nearly everything into
+  one or two. Gated by the existing `tss_srna_min_reads` and
+  `tss_srna_min_samples`, whose descriptions now say they govern both size
+  filters.
+
+  Measured on Arabidopsis csRNA-seq over 113,557 consensus clusters, `n = 2` with
+  a 0.8 ceiling flags 0.09% of protein-coding clusters and 17% of transposon
+  clusters. It catches contaminants that fall outside any plant small RNA size
+  class, for example an abundant 27-28 nt 5'-polyphosphate species over a
+  BRODYAGA1A element (top-2 share 0.83) that `tss_srna_sizes: [21..25]` misses
+  entirely.
+- `tss.consensus.sizes.txt` gains a `.topn` column per library. Columns are now
+  written on demand: `.reads` always, `.srna` only when `tss_srna_sizes` is set,
+  `.topn` only when the top-lengths filter is on. `tss_top_sizes_n` is baked into
+  the table, so changing it re-runs `tss_size_composition`.
+- Unit coverage for the new filter: two more `normalize` invocations (7 of 10
+  clusters kept at `tss_srna_min_samples` 1, 8 at 2) and a third
+  `size_composition` invocation checking the `.topn` column layout. The tag
+  fixtures now give most clusters a spread of 5-10 read lengths so both filters
+  have real negatives as well as positives.
+
+### Changed
+- `tss_srna_min_reads` default raised from 30 to 100. Size composition is
+  estimated from few reads at weakly expressed clusters, so the low floor cost
+  specificity: measured on Arabidopsis data the top-lengths flag rate runs 2.4%
+  at 30-50 reads per cluster against 0.1-0.3% above 300. Genuine single-locus
+  contaminants carry thousands of reads, so the higher floor keeps them. Only
+  affects runs that enable a size filter; `tests/data/config.yaml` pins 30 so the
+  unit fixtures still exercise the floor.
+
 ## [0.5.0] - 2026-08-04
 
 ### Added

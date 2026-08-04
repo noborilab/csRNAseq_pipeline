@@ -170,31 +170,50 @@ PER_SAMPLE_TSS = {
 }
 
 # ── HOMER tag directories for tss_size_composition.R ───────────────────────────
-# Reads placed inside the consensus clusters with chosen lengths, so the
-# size-composition filter has a known right answer. With srna sizes 21-25,
-# max fraction 0.5 and min reads 30:
-#   TSS_3  small-RNA dominated in all three libraries  → dropped at min_samples 1 or 2
-#   TSS_9  dominated in condB only                     → dropped at 1, kept at 2
-#   TSS_6  100% small-RNA sized but only 20 reads      → kept (below min reads)
-#   TSS_5  25% small-RNA sized                         → kept (below max fraction)
-# Each entry is (n_reads, length); a list per TSS is a mixture.
+# Reads placed inside the consensus clusters with chosen lengths, so both read-size
+# filters have a known right answer. Each entry is (n_reads, length) and a list per TSS
+# is a mixture; lengths within a TSS are distinct, as in a collapsed tag file.
+#
+# With srna sizes 21-25, max srna fraction 0.5, min reads 30:
+#   TSS_3  87.5% small-RNA sized in all three libraries → dropped at min_samples 1 or 2
+#   TSS_9  75% in condB only                            → dropped at 1, kept at 2
+#   TSS_6  100% small-RNA sized but only 20 reads       → kept (below the read floor)
+#   TSS_5  25% small-RNA sized                          → kept (below the fraction)
+#   → 8 of 10 kept at min_samples 1, 9 at min_samples 2
+#
+# With top_sizes_n 2 and max top fraction 0.8:
+#   TSS_3  two lengths only, so top-2 is 100%           → dropped in all three
+#   TSS_7  two lengths only                             → dropped in all three
+#   TSS_9  one length in condB after the siRNA mix      → dropped at 1, kept at 2
+#   TSS_6  100% but under the read floor                → kept
+#   others spread over 5-10 lengths (top-2 of 0.20-0.40) → kept
+#   → 7 of 10 kept at min_samples 1, 8 at min_samples 2
 SRNA_SIZES = [21, 22, 23, 24, 25]
+TOP_N = 2
+
+
+def spread(n_per, lengths):
+    """n_per reads at each of `lengths`, i.e. a heterogeneous cluster."""
+    return [(n_per, ln) for ln in lengths]
+
+
 TAG_MIX_COMMON = {
-    "TSS_1":  [(100, 35)],
-    "TSS_2":  [(50, 40)],
-    "TSS_3":  [(5, 35), (35, 24)],     # 40 reads, 87.5% small-RNA sized
-    "TSS_4":  [(40, 30)],
-    "TSS_5":  [(30, 35), (10, 24)],    # 40 reads, 25%
-    "TSS_6":  [(20, 24)],              # 100% but under the read floor
-    "TSS_7":  [(40, 45)],
-    "TSS_8":  [(40, 50)],
-    "TSS_9":  [(40, 35)],              # overridden for condB below
-    "TSS_10": [(35, 60)],
+    "TSS_1":  spread(10, range(30, 40)),                    # 100 reads, top2 0.20
+    "TSS_2":  spread(10, range(36, 41)),                    # 50 reads,  top2 0.40
+    "TSS_3":  [(5, 35), (35, 24)],                          # 40 reads,  top2 1.00
+    "TSS_4":  spread(5, range(28, 36)),                     # 40 reads,  top2 0.25
+    "TSS_5":  spread(6, range(30, 35)) + [(10, 24)],        # 40 reads,  top2 0.40
+    "TSS_6":  [(20, 24)],                                   # 20 reads,  under the floor
+    "TSS_7":  [(20, 45), (20, 46)],                         # 40 reads,  top2 1.00
+    "TSS_8":  spread(5, range(46, 54)),                     # 40 reads,  top2 0.25
+    "TSS_9":  spread(4, range(32, 42)),                     # 40 reads,  top2 0.20
+    "TSS_10": spread(7, range(57, 62)),                     # 35 reads,  top2 0.40
 }
 TAG_MIX = {
     "condA_csrna1": dict(TAG_MIX_COMMON),
     "condA_csrna2": dict(TAG_MIX_COMMON),
-    "condB_csrna1": dict(TAG_MIX_COMMON, **{"TSS_9": [(10, 35), (30, 22)]}),  # 75%
+    # condB turns TSS_9 into a siRNA-dominated, single-length-dominated cluster
+    "condB_csrna1": dict(TAG_MIX_COMMON, **{"TSS_9": [(10, 35), (30, 22)]}),
 }
 
 
@@ -226,11 +245,17 @@ def write_tagdir(path, mix):
 
 
 def write_size_composition(path, tag_mix):
-    """Hand-computed expected output of tss_size_composition.R for TAG_MIX."""
+    """Hand-computed expected output of tss_size_composition.R for TAG_MIX.
+
+    Holds every column the script can emit (.reads always, .srna when
+    tss_srna_sizes is set, .topn when the top-lengths filter is on, computed at
+    TOP_N). A run with only one filter enabled writes a subset of these columns, and
+    the assertions compare whichever columns it produced.
+    """
     samples = list(tag_mix)
     header = ["TSS"]
     for s in samples:
-        header += [f"{s}.reads", f"{s}.srna"]
+        header += [f"{s}.reads", f"{s}.srna", f"{s}.topn"]
     with open(path, "w") as fh:
         fh.write("\t".join(header) + "\n")
         for tss in CS_TSS:
@@ -240,7 +265,9 @@ def write_size_composition(path, tag_mix):
                 mix = tag_mix[s].get(pid, [])
                 total = sum(n for n, _ in mix)
                 srna = sum(n for n, ln in mix if ln in SRNA_SIZES)
-                row += [str(total), str(srna)]
+                # lengths are distinct within a mix, so each entry is one length's total
+                topn = sum(sorted((n for n, _ in mix), reverse=True)[:TOP_N])
+                row += [str(total), str(srna), str(topn)]
             fh.write("\t".join(row) + "\n")
 
 

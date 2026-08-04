@@ -39,13 +39,26 @@ accumulate <- function(vec, row, w) {
 srna_sizes <- suppressWarnings(as.integer(split_param(snakemake@params[["srna_sizes"]])))
 srna_sizes <- sort(unique(srna_sizes[!is.na(srna_sizes)]))
 
+# Second, independent measure: how much of a cluster sits in its top few read lengths,
+# whatever those lengths are. Real initiation is heterogeneous (a promoter yields reads
+# across tens of lengths), while a discretely processed RNA puts nearly everything into
+# one or two. That catches contaminants the fixed size list cannot, e.g. the 27-28 nt
+# 5'-polyphosphate species over some transposons.
+top_n <- suppressWarnings(as.integer(snakemake@params[["top_sizes_n"]]))
+if (is.na(top_n) || top_n < 1L) top_n <- 2L
+max_top_frac <- suppressWarnings(as.numeric(snakemake@params[["max_top_sizes_fraction"]]))
+if (is.na(max_top_frac)) max_top_frac <- 1
+want_top <- max_top_frac < 1
+
 tss <- import(snakemake@input[["bed"]])
 tss_names <- mcols(tss)[["name"]]
+n_tss <- length(tss_names)
 
-# Filter disabled: write the cluster list only and leave the tag directories alone,
+# Both filters off: write the cluster list only and leave the tag directories alone,
 # since reading them is the whole cost of this rule.
-if (!length(srna_sizes)) {
-    cat("tss_srna_sizes is empty: size-composition filter disabled, no tag directories read\n")
+if (!length(srna_sizes) && !want_top) {
+    cat("no size filter configured (tss_srna_sizes empty, tss_max_top_sizes_fraction 1):",
+        "no tag directories read\n")
     readr::write_tsv(data.frame(TSS = tss_names), snakemake@output[[1]])
     quit(save = "no", status = 0)
 }
@@ -55,8 +68,11 @@ tagdirs <- as.character(snakemake@input[["td"]])
 # basename keys this table to the columns of tss.consensus.homer.raw.txt.
 samples <- basename(tagdirs)
 
-cat("Small-RNA size classes: ", paste(srna_sizes, collapse = ", "), " nt\n", sep = "")
-cat("Measuring ", length(tss_names), " clusters across ", length(samples),
+if (length(srna_sizes)) {
+    cat("Small-RNA size classes: ", paste(srna_sizes, collapse = ", "), " nt\n", sep = "")
+}
+if (want_top) cat("Also measuring the share held by the top ", top_n, " read lengths\n", sep = "")
+cat("Measuring ", n_tss, " clusters across ", length(samples),
     " csRNA libraries\n", sep = "")
 
 tss_chr <- as.character(seqnames(tss))
@@ -77,11 +93,32 @@ for (ch in chroms) {
     }
 }
 
-reads <- matrix(0, nrow = length(tss_names), ncol = length(samples),
+reads <- matrix(0, nrow = n_tss, ncol = length(samples),
     dimnames = list(tss_names, samples))
 srna <- reads
+topn <- reads
+
+# Reads in a cluster's top `top_n` lengths, from per-(cluster, length) totals keyed as
+# row + (len - 1) * n_tss. Ranking within a cluster is a sort plus a within-group index,
+# so no per-cluster loop is needed.
+top_share <- function(key, val) {
+    agg <- rowsum(val, key)
+    k <- as.integer(rownames(agg)); v <- agg[, 1L]
+    row <- ((k - 1L) %% n_tss) + 1L
+    o <- order(row, -v)
+    row <- row[o]; v <- v[o]
+    rank_in_row <- sequence(rle(row)$lengths)
+    keep <- rank_in_row <= top_n
+    out <- numeric(n_tss)
+    agg2 <- rowsum(v[keep], row[keep])
+    out[as.integer(rownames(agg2))] <- agg2[, 1L]
+    out
+}
 
 for (s in seq_along(tagdirs)) {
+    len_keys <- if (want_top) vector("list", length(chroms) * length(strands)) else NULL
+    len_vals <- len_keys
+    nchunk <- 0L
     for (ch in chroms) {
         f <- file.path(tagdirs[s], paste0(ch, ".tags.tsv"))
         if (!file.exists(f)) next
@@ -109,16 +146,34 @@ for (s in seq_along(tagdirs)) {
             reads[, s] <- accumulate(reads[, s], row, tags$count[sel])
             si <- is_srna[sel]
             if (any(si)) srna[, s] <- accumulate(srna[, s], row[si], tags$count[sel][si])
+            if (want_top) {
+                # Collapse to per-(cluster, length) totals now, so what is carried to the
+                # end of the sample stays small.
+                agg <- rowsum(tags$count[sel],
+                    row + (as.integer(tags$len[sel]) - 1L) * n_tss)
+                nchunk <- nchunk + 1L
+                len_keys[[nchunk]] <- as.integer(rownames(agg))
+                len_vals[[nchunk]] <- agg[, 1L]
+            }
         }
     }
+    if (want_top && nchunk) {
+        topn[, s] <- top_share(unlist(len_keys[seq_len(nchunk)]),
+            unlist(len_vals[seq_len(nchunk)]))
+        len_keys <- len_vals <- NULL
+    }
     cat("  ", samples[s], ": ", format(sum(reads[, s]), big.mark = ","),
-        " reads in clusters, ", round(100 * sum(srna[, s]) / max(sum(reads[, s]), 1), 1),
-        "% in the small-RNA sizes\n", sep = "")
+        " reads in clusters", sep = "")
+    if (length(srna_sizes)) cat(", ",
+        round(100 * sum(srna[, s]) / max(sum(reads[, s]), 1), 1), "% in the small-RNA sizes",
+        sep = "")
+    cat("\n")
 }
 
 out <- data.frame(TSS = tss_names, stringsAsFactors = FALSE)
 for (s in seq_along(samples)) {
     out[[paste0(samples[s], ".reads")]] <- reads[, s]
-    out[[paste0(samples[s], ".srna")]]  <- srna[, s]
+    if (length(srna_sizes)) out[[paste0(samples[s], ".srna")]] <- srna[, s]
+    if (want_top)           out[[paste0(samples[s], ".topn")]] <- topn[, s]
 }
 readr::write_tsv(out, snakemake@output[[1]])

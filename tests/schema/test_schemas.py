@@ -115,3 +115,30 @@ class TestConfigSchema:
         cfg["filtering"]["tss_max_srna_fraction"] = 1.5
         with pytest.raises(Exception):
             validate(cfg, CONFIG_SCHEMA)
+
+    def test_top_sizes_keys_accepted(self):
+        """The top-lengths filter keys are accepted in config."""
+        from snakemake.utils import validate
+        with open(os.path.join(REPO, "tests", "data", "config.yaml")) as fh:
+            cfg = yaml.safe_load(fh)
+        cfg["filtering"]["tss_top_sizes_n"] = 3
+        cfg["filtering"]["tss_max_top_sizes_fraction"] = 0.8
+        validate(cfg, CONFIG_SCHEMA)
+
+    def test_top_sizes_n_must_be_at_least_one(self):
+        """tss_top_sizes_n of 0 must fail validation."""
+        from snakemake.utils import validate
+        with open(os.path.join(REPO, "tests", "data", "config.yaml")) as fh:
+            cfg = yaml.safe_load(fh)
+        cfg["filtering"]["tss_top_sizes_n"] = 0
+        with pytest.raises(Exception):
+            validate(cfg, CONFIG_SCHEMA)
+
+    def test_max_top_sizes_fraction_is_bounded(self):
+        """tss_max_top_sizes_fraction above 1 must fail validation."""
+        from snakemake.utils import validate
+        with open(os.path.join(REPO, "tests", "data", "config.yaml")) as fh:
+            cfg = yaml.safe_load(fh)
+        cfg["filtering"]["tss_max_top_sizes_fraction"] = 1.2
+        with pytest.raises(Exception):
+            validate(cfg, CONFIG_SCHEMA)

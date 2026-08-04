@@ -179,6 +179,36 @@ run_unit_smk() {
             --cores 1 \
             --quiet 2>&1 || rc=1
         python tests/e2e/unit_assertions.py normalize "$tmp4" --expect-kept 9 || rc=1
+
+        # Top-lengths filter. TSS_3 and TSS_7 have only two lengths each in every
+        # library, and condB's TSS_9 collapses to one, so any-library voting drops
+        # three clusters and requiring two libraries drops two.
+        local tmp6 cfg6
+        tmp6=$(mktemp -d)
+        cfg6=$(make_cfg "$tmp6" "$tmp6" "$tmp6/index/genome.fa" --max-top-sizes-fraction 0.8)
+        trap "rm -rf $tmp6 $cfg6" EXIT
+        echo ""
+        echo "--- normalize (top-lengths filter: n=2, max 0.8, min_samples=1) ---"
+        snakemake -s "$smk" \
+            --configfile "$cfg6" \
+            --config "test_outdir=$tmp6" \
+            --cores 1 \
+            --quiet 2>&1 || rc=1
+        python tests/e2e/unit_assertions.py normalize "$tmp6" --expect-kept 7 || rc=1
+
+        local tmp7 cfg7
+        tmp7=$(mktemp -d)
+        cfg7=$(make_cfg "$tmp7" "$tmp7" "$tmp7/index/genome.fa" \
+            --max-top-sizes-fraction 0.8 --srna-min-samples 2)
+        trap "rm -rf $tmp7 $cfg7" EXIT
+        echo ""
+        echo "--- normalize (top-lengths filter: n=2, max 0.8, min_samples=2) ---"
+        snakemake -s "$smk" \
+            --configfile "$cfg7" \
+            --config "test_outdir=$tmp7" \
+            --cores 1 \
+            --quiet 2>&1 || rc=1
+        python tests/e2e/unit_assertions.py normalize "$tmp7" --expect-kept 8 || rc=1
     fi
 
     if [[ "$rule_name" == "size_composition" ]]; then
@@ -194,6 +224,19 @@ run_unit_smk() {
             --cores 1 \
             --quiet 2>&1 || rc=1
         python tests/e2e/unit_assertions.py size_composition "$tmp5" --srna-enabled || rc=1
+
+        local tmp8 cfg8
+        tmp8=$(mktemp -d)
+        cfg8=$(make_cfg "$tmp8" "$tmp8" "$tmp8/index/genome.fa" --max-top-sizes-fraction 0.8)
+        trap "rm -rf $tmp8 $cfg8" EXIT
+        echo ""
+        echo "--- size_composition (top-lengths only, n=2) ---"
+        snakemake -s "$smk" \
+            --configfile "$cfg8" \
+            --config "test_outdir=$tmp8" \
+            --cores 1 \
+            --quiet 2>&1 || rc=1
+        python tests/e2e/unit_assertions.py size_composition "$tmp8" --top-enabled || rc=1
     fi
 
     return $rc

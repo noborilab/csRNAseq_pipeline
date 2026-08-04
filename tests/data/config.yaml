@@ -54,6 +54,9 @@ filtering:
   tss_min_reps: 1
   tss_min_cpm: 0
   tss_min_samples: 1
+  # Pinned rather than left to the shipped default of 100: the unit fixtures use
+  # clusters of 20-100 reads, so this is the value that exercises the read floor.
+  tss_srna_min_reads: 30
   mask_srnas_from_bw: False
 
 files:

@@ -216,7 +216,7 @@ def assert_qc_final(outdir: str) -> None:
     ok(f"qc_final_cs.txt ({n_cs} rows) and qc_final_in.txt ({n_in} rows) correct")
 
 
-def assert_size_composition(outdir: str, enabled: bool) -> None:
+def assert_size_composition(outdir: str, srna_enabled: bool, top_enabled: bool) -> None:
     path = os.path.join(outdir, "tss.consensus.sizes.txt")
     if not os.path.exists(path):
         fail(f"Missing output: {path}")
@@ -226,28 +226,36 @@ def assert_size_composition(outdir: str, enabled: bool) -> None:
     if len(rows) != N_CS_TSSS:
         fail(f"tss.consensus.sizes.txt has {len(rows)} rows, expected {N_CS_TSSS}")
 
-    if not enabled:
-        # Disabled: cluster names only, so no tag directory was read.
+    if not (srna_enabled or top_enabled):
+        # Both filters off: cluster names only, so no tag directory was read.
         if list(rows[0]) != ["TSS"]:
-            fail(f"With tss_srna_sizes empty, expected a TSS column only, got {list(rows[0])}")
-        ok(f"Filter disabled: {len(rows)} cluster names, no per-sample columns")
+            fail(f"With no filter configured, expected a TSS column only, got {list(rows[0])}")
+        ok(f"Filters disabled: {len(rows)} cluster names, no per-sample columns")
         return
 
-    # Enabled: must reproduce the hand-computed fixture exactly.
+    # The fixture holds every column the script can emit; a run writes .reads always,
+    # .srna only when tss_srna_sizes is set, and .topn only when the top-lengths filter
+    # is on. Check the column set, then the values for whatever was written.
     expected_path = os.path.join(FIXTURES, "tss.consensus.sizes.txt")
     with open(expected_path) as fh:
         expected = {r["TSS"]: r for r in csv.DictReader(fh, delimiter="\t")}
     got = {r["TSS"]: r for r in rows}
     if set(got) != set(expected):
         fail(f"cluster names differ from fixture: {set(got) ^ set(expected)}")
-    cols = [c for c in expected[next(iter(expected))] if c != "TSS"]
-    if sorted(c for c in rows[0] if c != "TSS") != sorted(cols):
-        fail(f"columns differ from fixture: {sorted(c for c in rows[0] if c != 'TSS')} vs {sorted(cols)}")
+
+    cols = [c for c in rows[0] if c != "TSS"]
+    suffixes = {c.rsplit(".", 1)[1] for c in cols}
+    want = {"reads"} | ({"srna"} if srna_enabled else set()) | ({"topn"} if top_enabled else set())
+    if suffixes != want:
+        fail(f"expected column kinds {sorted(want)}, got {sorted(suffixes)}")
+    missing = [c for c in cols if c not in expected[next(iter(expected))]]
+    if missing:
+        fail(f"columns not present in the fixture: {missing}")
     for tss, exp in expected.items():
         for c in cols:
             if float(got[tss][c]) != float(exp[c]):
                 fail(f"{tss} {c}: got {got[tss][c]}, expected {exp[c]}")
-    ok(f"Read counts and small-RNA counts match the fixture for all {len(rows)} clusters")
+    ok(f"{', '.join(sorted(want))} counts match the fixture for all {len(rows)} clusters")
 
 
 RULES = {
@@ -268,14 +276,16 @@ if __name__ == "__main__":
     parser.add_argument("--expect-kept", type=int, default=None,
                         help="For normalize: exact number of TSSs expected in tss.final.bed")
     parser.add_argument("--srna-enabled", action="store_true",
-                        help="For size_composition: expect per-sample columns")
+                        help="For size_composition: expect .srna columns")
+    parser.add_argument("--top-enabled", action="store_true",
+                        help="For size_composition: expect .topn columns")
     args = parser.parse_args()
 
     fn = RULES[args.rule]
     if args.rule == "normalize":
         fn(args.outdir, args.filtered, args.expect_kept)
     elif args.rule == "size_composition":
-        fn(args.outdir, args.srna_enabled)
+        fn(args.outdir, args.srna_enabled, args.top_enabled)
     else:
         fn(args.outdir)
 

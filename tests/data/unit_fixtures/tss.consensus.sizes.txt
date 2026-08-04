@@ -1,11 +1,11 @@
-TSS	condA_csrna1.reads	condA_csrna1.srna	condA_csrna2.reads	condA_csrna2.srna	condB_csrna1.reads	condB_csrna1.srna
-TSS_1	100	0	100	0	100	0
-TSS_2	50	0	50	0	50	0
-TSS_3	40	35	40	35	40	35
-TSS_4	40	0	40	0	40	0
-TSS_5	40	10	40	10	40	10
-TSS_6	20	20	20	20	20	20
-TSS_7	40	0	40	0	40	0
-TSS_8	40	0	40	0	40	0
-TSS_9	40	0	40	0	40	30
-TSS_10	35	0	35	0	35	0
+TSS	condA_csrna1.reads	condA_csrna1.srna	condA_csrna1.topn	condA_csrna2.reads	condA_csrna2.srna	condA_csrna2.topn	condB_csrna1.reads	condB_csrna1.srna	condB_csrna1.topn
+TSS_1	100	0	20	100	0	20	100	0	20
+TSS_2	50	0	20	50	0	20	50	0	20
+TSS_3	40	35	40	40	35	40	40	35	40
+TSS_4	40	0	10	40	0	10	40	0	10
+TSS_5	40	10	16	40	10	16	40	10	16
+TSS_6	20	20	20	20	20	20	20	20	20
+TSS_7	40	0	40	40	0	40	40	0	40
+TSS_8	40	0	10	40	0	10	40	0	10
+TSS_9	40	0	8	40	0	8	40	30	40
+TSS_10	35	0	14	35	0	14	35	0	14

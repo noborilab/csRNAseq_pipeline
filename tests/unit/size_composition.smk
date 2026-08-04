@@ -27,5 +27,7 @@ rule test_tss_size_composition:
         srna_sizes=" ".join(
             str(int(x)) for x in config["filtering"].get("tss_srna_sizes", []) or []
         ),
+        top_sizes_n=config["filtering"].get("tss_top_sizes_n", 2),
+        max_top_sizes_fraction=config["filtering"].get("tss_max_top_sizes_fraction", 1),
     script:
         "../../workflow/scripts/tss_size_composition.R"

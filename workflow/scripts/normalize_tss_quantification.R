@@ -29,46 +29,75 @@ quant_m  <- quant_m[keep, , drop = FALSE]
 tss      <- tss[mcols(tss)[["name"]] %in% rownames(quant_m)]
 cat("CPM filter: kept ", sum(keep), " of ", length(keep), " consensus TSSs\n", sep = "")
 
-# Read-size composition filter: drop TSSs whose reads are dominated by the small
-# RNA size classes listed in filtering.tss_srna_sizes (in plants, the 21-25 nt
-# siRNAs).  Those species are uncapped, but they survive the enzymatic depletion
-# well enough to be called as TSS clusters, and enrichment over the input cannot
-# reject them where the input has too little coverage to measure a background.
-# Read length separates them from genuine initiation, which is not confined to one
-# small size class.  Counts come from tss.consensus.sizes.txt (tss_size_composition
-# rule), so no extra HOMER run is needed.
+# Read-size composition filters.  Both read tss.consensus.sizes.txt from the
+# tss_size_composition rule, so neither needs an extra HOMER run, and both work the same
+# way: a cluster is dropped when some measure of its reads exceeds a fraction, in at least
+# min_samples libraries that have at least min_reads reads there.
+#
+#   1. Small-RNA sizes (filtering.tss_srna_sizes, in plants the 21-25 nt siRNAs).  Those
+#      species are uncapped but survive the enzymatic depletion well enough to be called
+#      as TSS clusters, and enrichment over the input cannot reject them where the input
+#      has too little coverage to measure a background.
+#   2. Top-n lengths (filtering.tss_max_top_sizes_fraction), whatever those lengths are.
+#      Genuine initiation is heterogeneous: a promoter yields reads across tens of
+#      lengths, so its two commonest lengths hold only a fifth or so of it.  A discretely
+#      processed RNA puts nearly everything into one or two lengths.  This catches
+#      contaminants that fall outside any fixed size list, e.g. the 27-28 nt
+#      5'-polyphosphate species found over some transposons.
 srna_sizes       <- trimws(as.character(snakemake@params[["srna_sizes"]]))
 srna_sizes       <- if (nzchar(srna_sizes)) strsplit(srna_sizes, "[[:space:]]+")[[1]] else character(0)
 max_srna_frac    <- snakemake@params[["max_srna_fraction"]]
 srna_min_reads   <- snakemake@params[["srna_min_reads"]]
 srna_min_samples <- snakemake@params[["srna_min_samples"]]
+top_n            <- snakemake@params[["top_sizes_n"]]
+max_top_frac     <- snakemake@params[["max_top_sizes_fraction"]]
 
-if (length(srna_sizes) > 0) {
-    comp <- as.data.frame(suppressWarnings(suppressMessages(
-        readr::read_tsv(trimws(snakemake@input[["sizes"]]), progress = FALSE))))
-    rownames(comp) <- comp[["TSS"]]
+# TSS names to keep: those where fewer than min_samples libraries have more than max_frac
+# of their reads in the `suffix` measure.  Only libraries with enough reads in a cluster
+# get a vote, so a couple of stray reads cannot condemn it.
+size_filter <- function(comp, suffix, max_frac, min_reads, min_samples, label, why) {
     read_cols <- grep("\\.reads$", colnames(comp), value = TRUE)
-    srna_cols <- sub("\\.reads$", ".srna", read_cols)
-    if (!length(read_cols) || !all(srna_cols %in% colnames(comp))) {
-        stop("tss.consensus.sizes.txt has no per-sample columns, but tss_srna_sizes is set. ",
-             "Re-run the tss_size_composition rule (delete tss.consensus.sizes.txt).")
+    num_cols  <- sub("\\.reads$", suffix, read_cols)
+    if (!length(read_cols) || !all(num_cols %in% colnames(comp))) {
+        stop("tss.consensus.sizes.txt lacks the ", suffix, " columns this filter needs (",
+             why, " is set). Re-run the tss_size_composition rule ",
+             "(delete tss.consensus.sizes.txt).")
     }
     ids <- intersect(rownames(quant_m), rownames(comp))
     r <- as.matrix(comp[ids, read_cols, drop = FALSE])
-    v <- as.matrix(comp[ids, srna_cols, drop = FALSE])
-    # Only libraries with enough reads in a cluster get a vote on it, so a couple of
-    # stray small-RNA reads cannot condemn a cluster.
-    testable <- r >= srna_min_reads
-    dominated <- testable & (v / pmax(r, 1)) > max_srna_frac
-    n_over <- rowSums(dominated)
-    keep_size <- n_over < srna_min_samples
-    quant_m <- quant_m[ids, , drop = FALSE][keep_size, , drop = FALSE]
-    tss     <- tss[mcols(tss)[["name"]] %in% rownames(quant_m)]
-    cat("Size-composition filter (>", 100 * max_srna_frac, "% of reads at ",
-        paste(srna_sizes, collapse = "/"), " nt in >=", srna_min_samples,
-        " librar", if (srna_min_samples == 1) "y" else "ies", " with >=",
-        srna_min_reads, " reads): kept ", sum(keep_size), " of ", length(keep_size),
-        " TSSs\n", sep = "")
+    v <- as.matrix(comp[ids, num_cols, drop = FALSE])
+    dominated <- (r >= min_reads) & (v / pmax(r, 1)) > max_frac
+    keep <- rowSums(dominated) < min_samples
+    cat(label, ": kept ", sum(keep), " of ", length(keep), " TSSs\n", sep = "")
+    ids[keep]
+}
+
+if (length(srna_sizes) > 0 || max_top_frac < 1) {
+    comp <- as.data.frame(suppressWarnings(suppressMessages(
+        readr::read_tsv(trimws(snakemake@input[["sizes"]]), progress = FALSE))))
+    rownames(comp) <- comp[["TSS"]]
+
+    if (length(srna_sizes) > 0) {
+        keep_ids <- size_filter(comp, ".srna", max_srna_frac, srna_min_reads,
+            srna_min_samples, sprintf(
+                "Small-RNA size filter (>%g%% of reads at %s nt in >=%d librar%s with >=%d reads)",
+                100 * max_srna_frac, paste(srna_sizes, collapse = "/"), srna_min_samples,
+                if (srna_min_samples == 1) "y" else "ies", srna_min_reads),
+            "tss_srna_sizes")
+        quant_m <- quant_m[keep_ids, , drop = FALSE]
+        tss     <- tss[mcols(tss)[["name"]] %in% rownames(quant_m)]
+    }
+
+    if (max_top_frac < 1) {
+        keep_ids <- size_filter(comp, ".topn", max_top_frac, srna_min_reads,
+            srna_min_samples, sprintf(
+                "Top-%d-lengths filter (>%g%% of reads in the %d commonest lengths in >=%d librar%s with >=%d reads)",
+                top_n, 100 * max_top_frac, top_n, srna_min_samples,
+                if (srna_min_samples == 1) "y" else "ies", srna_min_reads),
+            "tss_max_top_sizes_fraction")
+        quant_m <- quant_m[keep_ids, , drop = FALSE]
+        tss     <- tss[mcols(tss)[["name"]] %in% rownames(quant_m)]
+    }
 }
 
 # csRNA/sRNA ratio filter: keep TSSs where (csRNA reads / paired input reads)

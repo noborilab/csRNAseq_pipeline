@@ -819,11 +819,13 @@ rule tss_size_composition:
     benchmark:
         OUTPUT_DIR + "/qc/tss_size_composition.benchmark.txt",
     resources:
-        mem_mb=4000,
+        mem_mb=6000,
     params:
         srna_sizes=" ".join(
             str(int(x)) for x in config["filtering"].get("tss_srna_sizes", []) or []
         ),
+        top_sizes_n=config["filtering"].get("tss_top_sizes_n", 2),
+        max_top_sizes_fraction=config["filtering"].get("tss_max_top_sizes_fraction", 1),
     script:
         "scripts/tss_size_composition.R"
 
@@ -854,8 +856,10 @@ rule normalize_tss_quantification:
             str(int(x)) for x in config["filtering"].get("tss_srna_sizes", []) or []
         ),
         max_srna_fraction=config["filtering"].get("tss_max_srna_fraction", 0.5),
-        srna_min_reads=config["filtering"].get("tss_srna_min_reads", 30),
+        srna_min_reads=config["filtering"].get("tss_srna_min_reads", 100),
         srna_min_samples=config["filtering"].get("tss_srna_min_samples", 1),
+        top_sizes_n=config["filtering"].get("tss_top_sizes_n", 2),
+        max_top_sizes_fraction=config["filtering"].get("tss_max_top_sizes_fraction", 1),
         cs_ids=" ".join(list(sampletab["id"][sampletab["sample_type"] == "csrna"])),
         paired_in_ids=" ".join(
             [

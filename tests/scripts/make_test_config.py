@@ -28,6 +28,9 @@ def main():
                    help="Comma-separated read lengths for the size-composition "
                         "filter, e.g. 21,22,23,24,25")
     p.add_argument("--srna-min-samples", type=int, default=None)
+    p.add_argument("--max-top-sizes-fraction", type=float, default=None,
+                   help="Enable the top-lengths filter at this fraction (1 disables)")
+    p.add_argument("--top-sizes-n", type=int, default=None)
     p.add_argument("--alignment-program",
                    choices=["bwa-aln", "bwa-mem", "STAR", "bowtie2", "hisat2"],
                    default=None)
@@ -66,6 +69,10 @@ def main():
         ]
     if args.srna_min_samples is not None:
         cfg["filtering"]["tss_srna_min_samples"] = args.srna_min_samples
+    if args.max_top_sizes_fraction is not None:
+        cfg["filtering"]["tss_max_top_sizes_fraction"] = args.max_top_sizes_fraction
+    if args.top_sizes_n is not None:
+        cfg["filtering"]["tss_top_sizes_n"] = args.top_sizes_n
     if args.alignment_program is not None:
         cfg["program"]["alignment_program"] = args.alignment_program
         # STAR's SA pre-indexing string must satisfy genomeSAindexNbases ≤ log2(L)/2-1.

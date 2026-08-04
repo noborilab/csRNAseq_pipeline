@@ -33,8 +33,10 @@ rule test_normalize_tss_quantification:
             str(int(x)) for x in config["filtering"].get("tss_srna_sizes", []) or []
         ),
         max_srna_fraction=config["filtering"].get("tss_max_srna_fraction", 0.5),
-        srna_min_reads=config["filtering"].get("tss_srna_min_reads", 30),
+        srna_min_reads=config["filtering"].get("tss_srna_min_reads", 100),
         srna_min_samples=config["filtering"].get("tss_srna_min_samples", 1),
+        top_sizes_n=config["filtering"].get("tss_top_sizes_n", 2),
+        max_top_sizes_fraction=config["filtering"].get("tss_max_top_sizes_fraction", 1),
         cs_ids="condA_csrna1 condA_csrna2 condB_csrna1",
         paired_in_ids="condA_input1 condA_input2 condA_input1",
     script:

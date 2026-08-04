@@ -137,7 +137,7 @@ cluster goes. The default `[]` disables the filter, and while it is disabled the
 filtering:
   tss_srna_sizes: [21, 22, 23, 24, 25]
   tss_max_srna_fraction: 0.5
-  tss_srna_min_reads: 30
+  tss_srna_min_reads: 100
   tss_srna_min_samples: 1
 ```
 
@@ -149,6 +149,43 @@ you would rather keep a cluster that only one library objects to.
 
 Per-cluster counts land in `tss.consensus.sizes.txt` whether or not anything is
 removed, so the size composition can be inspected directly.
+
+### `filtering / tss_max_top_sizes_fraction` and the top-lengths filter
+
+The size list above only catches contaminants whose length you can name in advance. This
+second filter needs no such list: it asks how concentrated a cluster is in its own
+commonest read lengths. Genuine initiation is heterogeneous, because a promoter fires
+across a window and the resulting RNAs vary in length, so a protein-coding cluster spreads
+over tens of lengths and its two commonest hold only about a fifth of it. A discretely
+processed RNA has one 5′ end and one 3′ end and puts nearly everything into one or two
+lengths.
+
+Set `tss_max_top_sizes_fraction` below 1 to enable, and `tss_top_sizes_n` for how many
+lengths to add up. The same `tss_srna_min_reads` and `tss_srna_min_samples` gates apply.
+
+```yaml
+filtering:
+  tss_top_sizes_n: 2
+  tss_max_top_sizes_fraction: 0.8
+```
+
+Measured on Arabidopsis csRNA-seq (113,557 consensus clusters, libraries with at least 30
+reads in a cluster), those settings flag **0.09% of protein-coding clusters and 17% of
+transposon clusters**. The medians it works from: pcTSS clusters spread over 33 distinct
+lengths with a top-2 share of 0.21, while transposon clusters manage 10 lengths and 0.49.
+It catches, for example, an abundant 27-28 nt species over a BRODYAGA1A element whose 5′
+and 3′ ends are both fixed (top-2 share 0.83), which sits outside any plant small RNA size
+class and so escapes `tss_srna_sizes: [21, 22, 23, 24, 25]` entirely.
+
+Concentration is estimated from few reads at weakly expressed clusters, so the flag rate is
+depth-dependent: pooled across classes it runs 2.4% at 30-50 reads per cluster, 1.1% at
+51-100, and 0.1-0.3% above 300. That is why `tss_srna_min_reads` defaults to 100. Real
+single-locus contaminants are usually very abundant (the BRODYAGA1A species carries over
+20,000 reads in one library), so the floor keeps them while dropping most of the
+small-sample noise. Lower it to around 30 if you would rather be sensitive.
+
+Note that `tss_top_sizes_n` is baked into `tss.consensus.sizes.txt` when it is written, so
+changing it re-runs the `tss_size_composition` rule.
 
 ## Workflow Steps
 
@@ -166,8 +203,8 @@ removed, so the size composition can be inspected directly.
 | `qc_initial_tss` | Calculate FRiP, nuclear read %, csRNA enrichment, miRNA depletion, and phosphorylation efficiency. Samples with FRiP < `min_cs_frip` or nuclear % < `min_pct_nuclear` are flagged as FAIL. |
 | `collect_consensus_tss` | Build the consensus TSS set (`tss.consensus.bed`) from csRNA samples, requiring detection in at least `tss_min_reps` replicates. TSSs narrower than 150 bp are padded; overlapping TSSs are split. TSSs overlapping miRNA / pre-tRNA loci (if `qc / mirnas` and `qc / trnas` are set) are removed. |
 | `quantify_final_tss` | HOMER quantification of the consensus TSSs in all csRNA libraries. |
-| `tss_size_composition` | Per-cluster read counts and small-RNA-sized read counts from the tag directories, written to `tss.consensus.sizes.txt`. Reads nothing when `filtering / tss_srna_sizes` is empty. |
-| `normalize_tss_quantification` | CPM filter (drop TSSs below `filtering / tss_min_cpm` in fewer than `filtering / tss_min_samples` csRNA samples), then the read-size composition filter (`filtering / tss_srna_sizes`), then TMM normalization (edgeR `TMMwsp`) of the retained counts. Writes the filtered set as `tss.final.bed`. Default CPM threshold is 0 and default size list is empty, which keeps all TSSs. |
+| `tss_size_composition` | Per-cluster read counts, small-RNA-sized read counts and top-lengths concentration from the tag directories, written to `tss.consensus.sizes.txt`. Reads nothing when both size filters are off. |
+| `normalize_tss_quantification` | CPM filter (drop TSSs below `filtering / tss_min_cpm` in fewer than `filtering / tss_min_samples` csRNA samples), then the two read-size composition filters (`filtering / tss_srna_sizes` and `filtering / tss_max_top_sizes_fraction`), then TMM normalization (edgeR `TMMwsp`) of the retained counts. Writes the filtered set as `tss.final.bed`. All of these default to no-ops, keeping every TSS. |
 | `quantify_final_in_tss` | HOMER quantification of the filtered `tss.final.bed` in all input libraries. Used by the final QC step. |
 | `qc_final_tss` | Compute FRiP, csEnrichment, replicate correlations, and TSS detection rate on the filtered `tss.final.bed`. Writes `qc/qc_final_cs.txt` and `qc/qc_final_in.txt`. |
 | `generate_normalized_bw` | Multiply raw bedGraphs by RPM scale factors and export as bigWig. Small RNA regions can optionally be masked. |
@@ -179,7 +216,7 @@ All outputs land in `files / output_dir` (default: `results/`):
 | File | Description |
 |------|-------------|
 | `tss.consensus.bed` | Unfiltered consensus TSS set (before CPM filter). |
-| `tss.consensus.sizes.txt` | Per-cluster read counts and small-RNA-sized read counts per csRNA library, used by the read-size composition filter. Cluster names only when `tss_srna_sizes` is empty. |
+| `tss.consensus.sizes.txt` | Per csRNA library and cluster: total reads (`.reads`), reads in `tss_srna_sizes` (`.srna`), and reads in the cluster's `tss_top_sizes_n` commonest lengths (`.topn`). Cluster names only when both size filters are off. |
 | `tss.final.bed` | Filtered consensus TSS coordinates (BED6). With default `tss_min_cpm: 0` and `tss_srna_sizes: []` this equals `tss.consensus.bed`. |
 | `tss.final.raw.txt` | Raw tag counts per TSS per csRNA sample (filtered set only). |
 | `tss.final.cpm.txt` | TMM-normalized CPM counts. |
