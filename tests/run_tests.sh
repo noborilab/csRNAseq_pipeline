@@ -97,7 +97,8 @@ run_validate() {
         trim align make_tagdir find_tss_initial make_raw_bedgraph
         gather_stats merge_initial_tss
         quantify_initial_cs_tss quantify_initial_in_tss qc_initial_tss
-        collect_consensus_tss quantify_final_tss normalize_tss_quantification
+        collect_consensus_tss quantify_final_tss tss_size_composition
+        normalize_tss_quantification
         quantify_final_in_tss qc_final_tss generate_normalized_bw
     )
     local missing=()
@@ -118,6 +119,9 @@ run_validate() {
 run_unit_smk() {
     local rule_name="$1"
     local smk="tests/unit/${rule_name}.smk"
+    # Every step records into rc rather than aborting, so a failure in one
+    # invocation is still reported when later invocations follow it.
+    local rc=0
 
     echo "--- $rule_name (default params) ---"
     local tmp cfg
@@ -129,8 +133,8 @@ run_unit_smk() {
         --configfile "$cfg" \
         --config "test_outdir=$tmp" \
         --cores 1 \
-        --quiet 2>&1
-    python tests/e2e/unit_assertions.py "$rule_name" "$tmp"
+        --quiet 2>&1 || rc=1
+    python tests/e2e/unit_assertions.py "$rule_name" "$tmp" || rc=1
 
     if [[ "$rule_name" == "normalize" ]]; then
         local tmp2 cfg2
@@ -143,13 +147,60 @@ run_unit_smk() {
             --configfile "$cfg2" \
             --config "test_outdir=$tmp2" \
             --cores 1 \
-            --quiet 2>&1
-        python tests/e2e/unit_assertions.py normalize "$tmp2" --filtered
+            --quiet 2>&1 || rc=1
+        python tests/e2e/unit_assertions.py normalize "$tmp2" --filtered || rc=1
+
+        # Size-composition filter. The fixture is built so TSS_3 is small-RNA
+        # dominated in all three libraries and TSS_9 in condB only, so any-library
+        # voting drops both and requiring two libraries drops only TSS_3.
+        local tmp3 cfg3
+        tmp3=$(mktemp -d)
+        cfg3=$(make_cfg "$tmp3" "$tmp3" "$tmp3/index/genome.fa" --srna-sizes 21,22,23,24,25)
+        trap "rm -rf $tmp3 $cfg3" EXIT
+        echo ""
+        echo "--- normalize (size filter: srna sizes 21-25, min_samples=1) ---"
+        snakemake -s "$smk" \
+            --configfile "$cfg3" \
+            --config "test_outdir=$tmp3" \
+            --cores 1 \
+            --quiet 2>&1 || rc=1
+        python tests/e2e/unit_assertions.py normalize "$tmp3" --expect-kept 8 || rc=1
+
+        local tmp4 cfg4
+        tmp4=$(mktemp -d)
+        cfg4=$(make_cfg "$tmp4" "$tmp4" "$tmp4/index/genome.fa" \
+            --srna-sizes 21,22,23,24,25 --srna-min-samples 2)
+        trap "rm -rf $tmp4 $cfg4" EXIT
+        echo ""
+        echo "--- normalize (size filter: srna sizes 21-25, min_samples=2) ---"
+        snakemake -s "$smk" \
+            --configfile "$cfg4" \
+            --config "test_outdir=$tmp4" \
+            --cores 1 \
+            --quiet 2>&1 || rc=1
+        python tests/e2e/unit_assertions.py normalize "$tmp4" --expect-kept 9 || rc=1
     fi
+
+    if [[ "$rule_name" == "size_composition" ]]; then
+        local tmp5 cfg5
+        tmp5=$(mktemp -d)
+        cfg5=$(make_cfg "$tmp5" "$tmp5" "$tmp5/index/genome.fa" --srna-sizes 21,22,23,24,25)
+        trap "rm -rf $tmp5 $cfg5" EXIT
+        echo ""
+        echo "--- size_composition (srna sizes 21-25) ---"
+        snakemake -s "$smk" \
+            --configfile "$cfg5" \
+            --config "test_outdir=$tmp5" \
+            --cores 1 \
+            --quiet 2>&1 || rc=1
+        python tests/e2e/unit_assertions.py size_composition "$tmp5" --srna-enabled || rc=1
+    fi
+
+    return $rc
 }
 
 run_unit() {
-    for rule in normalize collect_consensus qc_initial qc_final; do
+    for rule in normalize size_composition collect_consensus qc_initial qc_final; do
         run_step "unit/$rule" run_unit_smk "$rule"
     done
 }

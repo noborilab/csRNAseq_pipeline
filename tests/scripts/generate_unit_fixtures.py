@@ -29,20 +29,22 @@ IN_IDS = ["condA_input1", "condA_input2"]
 PAIRED_IN_IDS = ["condA_input1", "condA_input2", "condA_input1"]
 
 # ── Statistics fixtures ─────────────────────────────────────────────────────────
-# Header: Sample  TotalReads  OrganelleReads  Freq1A  PosReads  NegReads
+# Column order matches workflow/scripts/gather_stats.sh:
+#   Sample  RawReads  TrimmedReads  TotalReads  OrganelleReads  Freq1A  PosReads  NegReads
 STATS_CS = [
-    ("condA_csrna1", 500, 0, 0.80, 400, 100),
-    ("condA_csrna2", 480, 0, 0.75, 360, 120),
-    ("condB_csrna1", 520, 0, 0.82, 426,  94),
+    ("condA_csrna1", 550, 510, 500, 0, 0.80, 400, 100),
+    ("condA_csrna2", 530, 490, 480, 0, 0.75, 360, 120),
+    ("condB_csrna1", 570, 530, 520, 0, 0.82, 426,  94),
 ]
 STATS_IN = [
-    ("condA_input1", 450, 0, 0.50, 225, 225),
-    ("condA_input2", 460, 0, 0.45, 207, 253),
+    ("condA_input1", 500, 460, 450, 0, 0.50, 225, 225),
+    ("condA_input2", 510, 470, 460, 0, 0.45, 207, 253),
 ]
 
 def write_stats(path, rows):
     with open(path, "w") as fh:
-        fh.write("Sample\tTotalReads\tOrganelleReads\tFreq1A\tPosReads\tNegReads\n")
+        fh.write("Sample\tRawReads\tTrimmedReads\tTotalReads\tOrganelleReads"
+                 "\tFreq1A\tPosReads\tNegReads\n")
         for r in rows:
             fh.write("\t".join(str(x) for x in r) + "\n")
 
@@ -167,6 +169,80 @@ PER_SAMPLE_TSS = {
     "condB_csrna1": CS_TSS[:4] + [CS_TSS[5]],  # TSS_1..TSS_4, TSS_6
 }
 
+# ── HOMER tag directories for tss_size_composition.R ───────────────────────────
+# Reads placed inside the consensus clusters with chosen lengths, so the
+# size-composition filter has a known right answer. With srna sizes 21-25,
+# max fraction 0.5 and min reads 30:
+#   TSS_3  small-RNA dominated in all three libraries  → dropped at min_samples 1 or 2
+#   TSS_9  dominated in condB only                     → dropped at 1, kept at 2
+#   TSS_6  100% small-RNA sized but only 20 reads      → kept (below min reads)
+#   TSS_5  25% small-RNA sized                         → kept (below max fraction)
+# Each entry is (n_reads, length); a list per TSS is a mixture.
+SRNA_SIZES = [21, 22, 23, 24, 25]
+TAG_MIX_COMMON = {
+    "TSS_1":  [(100, 35)],
+    "TSS_2":  [(50, 40)],
+    "TSS_3":  [(5, 35), (35, 24)],     # 40 reads, 87.5% small-RNA sized
+    "TSS_4":  [(40, 30)],
+    "TSS_5":  [(30, 35), (10, 24)],    # 40 reads, 25%
+    "TSS_6":  [(20, 24)],              # 100% but under the read floor
+    "TSS_7":  [(40, 45)],
+    "TSS_8":  [(40, 50)],
+    "TSS_9":  [(40, 35)],              # overridden for condB below
+    "TSS_10": [(35, 60)],
+}
+TAG_MIX = {
+    "condA_csrna1": dict(TAG_MIX_COMMON),
+    "condA_csrna2": dict(TAG_MIX_COMMON),
+    "condB_csrna1": dict(TAG_MIX_COMMON, **{"TSS_9": [(10, 35), (30, 22)]}),  # 75%
+}
+
+
+def write_tagdir(path, mix):
+    """Write a HOMER-format <chrom>.tags.tsv: name, chr, pos, strand, count, len.
+
+    Positions are spread across the cluster so no two rows share (pos, strand, len),
+    which is what a real tag directory looks like after collapsing.
+    """
+    os.makedirs(path, exist_ok=True)
+    rows = []
+    for tss in CS_TSS:
+        chrom, bed_start, bed_end, pid, _, strand = tss
+        if pid not in mix:
+            continue
+        # BED is half-open and 0-based; tag positions are 1-based inclusive.
+        first, last = bed_start + 1, bed_end
+        strand_code = 0 if strand == "+" else 1
+        offset = 0
+        for n_reads, length in mix[pid]:
+            for i in range(n_reads):
+                pos = first + (offset % (last - first + 1))
+                rows.append((chrom, pos, strand_code, 1, length))
+                offset += 1
+    rows.sort(key=lambda r: (r[1], r[2], r[4]))
+    with open(os.path.join(path, f"{CHROM}.tags.tsv"), "w") as fh:
+        for chrom, pos, strand_code, count, length in rows:
+            fh.write(f"\t{chrom}\t{pos}\t{strand_code}\t{count}.0\t{length}\n")
+
+
+def write_size_composition(path, tag_mix):
+    """Hand-computed expected output of tss_size_composition.R for TAG_MIX."""
+    samples = list(tag_mix)
+    header = ["TSS"]
+    for s in samples:
+        header += [f"{s}.reads", f"{s}.srna"]
+    with open(path, "w") as fh:
+        fh.write("\t".join(header) + "\n")
+        for tss in CS_TSS:
+            pid = tss[3]
+            row = [pid]
+            for s in samples:
+                mix = tag_mix[s].get(pid, [])
+                total = sum(n for n, _ in mix)
+                srna = sum(n for n, ln in mix if ln in SRNA_SIZES)
+                row += [str(total), str(srna)]
+            fh.write("\t".join(row) + "\n")
+
 
 def main():
     # Stats
@@ -186,6 +262,13 @@ def main():
     for sid, tss_list in PER_SAMPLE_TSS.items():
         write_bed(os.path.join(ps_dir, f"{sid}.tss.bed"), tss_list)
     print(f"  per_sample_tss/*.tss.bed")
+
+    # Tag directories + the hand-computed size composition they should produce
+    for sid, mix in TAG_MIX.items():
+        write_tagdir(os.path.join(UF, "tagdir", sid), mix)
+    print("  tagdir/*/%s.tags.tsv" % CHROM)
+    write_size_composition(os.path.join(UF, "tss.consensus.sizes.txt"), TAG_MIX)
+    print("  tss.consensus.sizes.txt")
 
     # HOMER quant matrices
     write_homer_quant(os.path.join(UF, "tss.consensus.homer.raw.txt"), CS_TSS, CS_IDS, QUANT_CS_CS)

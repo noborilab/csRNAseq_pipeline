@@ -24,6 +24,10 @@ def main():
     p.add_argument("genome_index")
     p.add_argument("--min-cpm",     type=float, default=None)
     p.add_argument("--min-samples", type=int,   default=None)
+    p.add_argument("--srna-sizes", default=None,
+                   help="Comma-separated read lengths for the size-composition "
+                        "filter, e.g. 21,22,23,24,25")
+    p.add_argument("--srna-min-samples", type=int, default=None)
     p.add_argument("--alignment-program",
                    choices=["bwa-aln", "bwa-mem", "STAR", "bowtie2", "hisat2"],
                    default=None)
@@ -56,6 +60,12 @@ def main():
         cfg["filtering"]["tss_min_cpm"] = args.min_cpm
     if args.min_samples is not None:
         cfg["filtering"]["tss_min_samples"] = args.min_samples
+    if args.srna_sizes is not None:
+        cfg["filtering"]["tss_srna_sizes"] = [
+            int(x) for x in args.srna_sizes.split(",") if x.strip()
+        ]
+    if args.srna_min_samples is not None:
+        cfg["filtering"]["tss_srna_min_samples"] = args.srna_min_samples
     if args.alignment_program is not None:
         cfg["program"]["alignment_program"] = args.alignment_program
         # STAR's SA pre-indexing string must satisfy genomeSAindexNbases ≤ log2(L)/2-1.

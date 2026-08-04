@@ -117,6 +117,39 @@ filtering:
   tss_min_samples: 2
 ```
 
+### `filtering / tss_srna_sizes` and the read-size composition filter
+
+Abundant uncapped small RNAs are the one contaminant the other filters cannot
+reach. In plants the 21-25 nt siRNAs, above all the 24 nt Pol IV class over
+transposons, survive TEX/AP well enough to be called as TSS clusters, and
+enrichment over the input cannot reject them wherever the input library has too
+little coverage to measure a local background. Their read length gives them
+away, because genuine initiation is not confined to one small size class.
+
+List the contaminating read lengths in `tss_srna_sizes`, and a TSS is dropped
+from `tss.final.bed` when more than `tss_max_srna_fraction` of its reads fall in
+those sizes. Only libraries with at least `tss_srna_min_reads` reads in the
+cluster get a vote, and `tss_srna_min_samples` of them must agree before the
+cluster goes. The default `[]` disables the filter, and while it is disabled the
+`tss_size_composition` rule does not read the tag directories at all.
+
+```yaml
+filtering:
+  tss_srna_sizes: [21, 22, 23, 24, 25]
+  tss_max_srna_fraction: 0.5
+  tss_srna_min_reads: 30
+  tss_srna_min_samples: 1
+```
+
+The default `tss_srna_min_samples: 1` drops a cluster that any single library
+flags, which is the sensitive choice when libraries differ in size selection: a
+40-80 nt library cannot see a 24 nt population that a 20-80 nt library shows
+plainly, so demanding agreement would let the contaminant through. Raise it if
+you would rather keep a cluster that only one library objects to.
+
+Per-cluster counts land in `tss.consensus.sizes.txt` whether or not anything is
+removed, so the size composition can be inspected directly.
+
 ## Workflow Steps
 
 | Rule | Description |
@@ -133,7 +166,8 @@ filtering:
 | `qc_initial_tss` | Calculate FRiP, nuclear read %, csRNA enrichment, miRNA depletion, and phosphorylation efficiency. Samples with FRiP < `min_cs_frip` or nuclear % < `min_pct_nuclear` are flagged as FAIL. |
 | `collect_consensus_tss` | Build the consensus TSS set (`tss.consensus.bed`) from csRNA samples, requiring detection in at least `tss_min_reps` replicates. TSSs narrower than 150 bp are padded; overlapping TSSs are split. TSSs overlapping miRNA / pre-tRNA loci (if `qc / mirnas` and `qc / trnas` are set) are removed. |
 | `quantify_final_tss` | HOMER quantification of the consensus TSSs in all csRNA libraries. |
-| `normalize_tss_quantification` | CPM filter (drop TSSs below `filtering / tss_min_cpm` in fewer than `filtering / tss_min_samples` csRNA samples), then TMM normalization (edgeR `TMMwsp`) of the retained counts. Writes the filtered set as `tss.final.bed`. Default CPM threshold is 0, which keeps all TSSs. |
+| `tss_size_composition` | Per-cluster read counts and small-RNA-sized read counts from the tag directories, written to `tss.consensus.sizes.txt`. Reads nothing when `filtering / tss_srna_sizes` is empty. |
+| `normalize_tss_quantification` | CPM filter (drop TSSs below `filtering / tss_min_cpm` in fewer than `filtering / tss_min_samples` csRNA samples), then the read-size composition filter (`filtering / tss_srna_sizes`), then TMM normalization (edgeR `TMMwsp`) of the retained counts. Writes the filtered set as `tss.final.bed`. Default CPM threshold is 0 and default size list is empty, which keeps all TSSs. |
 | `quantify_final_in_tss` | HOMER quantification of the filtered `tss.final.bed` in all input libraries. Used by the final QC step. |
 | `qc_final_tss` | Compute FRiP, csEnrichment, replicate correlations, and TSS detection rate on the filtered `tss.final.bed`. Writes `qc/qc_final_cs.txt` and `qc/qc_final_in.txt`. |
 | `generate_normalized_bw` | Multiply raw bedGraphs by RPM scale factors and export as bigWig. Small RNA regions can optionally be masked. |
@@ -145,7 +179,8 @@ All outputs land in `files / output_dir` (default: `results/`):
 | File | Description |
 |------|-------------|
 | `tss.consensus.bed` | Unfiltered consensus TSS set (before CPM filter). |
-| `tss.final.bed` | CPM-filtered consensus TSS coordinates (BED6). With default `tss_min_cpm: 0` this equals `tss.consensus.bed`. |
+| `tss.consensus.sizes.txt` | Per-cluster read counts and small-RNA-sized read counts per csRNA library, used by the read-size composition filter. Cluster names only when `tss_srna_sizes` is empty. |
+| `tss.final.bed` | Filtered consensus TSS coordinates (BED6). With default `tss_min_cpm: 0` and `tss_srna_sizes: []` this equals `tss.consensus.bed`. |
 | `tss.final.raw.txt` | Raw tag counts per TSS per csRNA sample (filtered set only). |
 | `tss.final.cpm.txt` | TMM-normalized CPM counts. |
 | `norm_factors.txt` | edgeR TMM normalization factors and RPM multipliers. |

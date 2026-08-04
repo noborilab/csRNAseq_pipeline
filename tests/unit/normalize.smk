@@ -18,6 +18,7 @@ rule test_normalize_tss_quantification:
         quant=FIXTURES + "/tss.consensus.homer.raw.txt",
         quant_in=FIXTURES + "/tss.consensus.in.homer.raw.txt",
         bed=FIXTURES + "/tss.consensus.bed",
+        sizes=FIXTURES + "/tss.consensus.sizes.txt",
     output:
         bed=TEST_OUTDIR + "/tss.final.bed",
         raw=TEST_OUTDIR + "/tss.final.raw.txt",
@@ -28,6 +29,12 @@ rule test_normalize_tss_quantification:
         min_samples=config["filtering"].get("tss_min_samples", 1),
         min_cs_in_ratio=config["filtering"].get("tss_min_cs_in_ratio", 0),
         min_ratio_samples=config["filtering"].get("tss_min_ratio_samples", 1),
+        srna_sizes=" ".join(
+            str(int(x)) for x in config["filtering"].get("tss_srna_sizes", []) or []
+        ),
+        max_srna_fraction=config["filtering"].get("tss_max_srna_fraction", 0.5),
+        srna_min_reads=config["filtering"].get("tss_srna_min_reads", 30),
+        srna_min_samples=config["filtering"].get("tss_srna_min_samples", 1),
         cs_ids="condA_csrna1 condA_csrna2 condB_csrna1",
         paired_in_ids="condA_input1 condA_input2 condA_input1",
     script:

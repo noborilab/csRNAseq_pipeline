@@ -297,6 +297,46 @@ properties:
           Minimum number of csRNA samples that must have csRNA/input ratio
           >= tss_min_cs_in_ratio for a TSS to be retained. Has no effect
           when tss_min_cs_in_ratio is 0.
+      tss_srna_sizes:
+        type: array
+        items:
+          type: integer
+        default: []
+        description: >
+          Read lengths (nt) treated as uncapped small RNA classes when judging
+          the read-size composition of a TSS cluster, e.g. [21, 22, 23, 24, 25]
+          for plant siRNAs (the 24 nt Pol IV class over transposons being the
+          usual offender). A TSS is dropped from tss.final.bed when more than
+          tss_max_srna_fraction of its reads fall in these sizes. Default []
+          disables the filter, and when empty the tss_size_composition rule
+          does not read the tag directories at all.
+      tss_max_srna_fraction:
+        type: number
+        minimum: 0
+        maximum: 1
+        default: 0.5
+        description: >
+          Maximum fraction of a TSS cluster's reads allowed to fall in
+          tss_srna_sizes before the cluster is treated as small-RNA derived and
+          dropped. Has no effect when tss_srna_sizes is empty.
+      tss_srna_min_reads:
+        type: integer
+        default: 30
+        description: >
+          Minimum reads a csRNA library must have in a cluster before that
+          library's size composition is allowed to judge it. Libraries below the
+          threshold do not vote, so a handful of stray small-RNA reads cannot
+          remove a cluster.
+      tss_srna_min_samples:
+        type: integer
+        default: 1
+        description: >
+          Number of csRNA libraries that must look small-RNA dominated for a
+          cluster to be dropped. The default of 1 removes a cluster flagged by
+          any single library, which is the sensitive choice when libraries
+          differ in size selection (a 40-80 nt library cannot see a 24 nt
+          population that a 20-80 nt library shows plainly). Raise it to demand
+          agreement across libraries.
       mask_srnas_from_bw:
         type: boolean
         default: True

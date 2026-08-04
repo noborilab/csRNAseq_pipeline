@@ -65,6 +65,14 @@ filtering:
   min_alignment_length: 15
   max_mismatch: 999
   tss_min_reps: 1
+  # Read-size composition filter. Drops TSS clusters whose reads sit mostly in
+  # uncapped small RNA size classes. Empty list disables it; for plants use
+  # [21, 22, 23, 24, 25], where the 24 nt Pol IV siRNAs over transposons are the
+  # main population that survives TEX/AP and gets called as TSSs.
+  tss_srna_sizes: []
+  tss_max_srna_fraction: 0.5
+  tss_srna_min_reads: 30
+  tss_srna_min_samples: 1
   mask_srnas_from_bw: True
 
 files:

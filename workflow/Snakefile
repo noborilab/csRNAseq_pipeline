@@ -805,6 +805,29 @@ rule quantify_final_tss:
         """
 
 
+rule tss_size_composition:
+    message:
+        "Measuring the read-size composition of consensus TSSs"
+    input:
+        bed=OUTPUT_DIR + "/tss.consensus.bed",
+        td=list(
+            (OUTPUT_DIR + "/tagdir/") + s
+            for s in sampletab["id"][sampletab["sample_type"] == "csrna"]
+        ),
+    output:
+        OUTPUT_DIR + "/tss.consensus.sizes.txt",
+    benchmark:
+        OUTPUT_DIR + "/qc/tss_size_composition.benchmark.txt",
+    resources:
+        mem_mb=4000,
+    params:
+        srna_sizes=" ".join(
+            str(int(x)) for x in config["filtering"].get("tss_srna_sizes", []) or []
+        ),
+    script:
+        "scripts/tss_size_composition.R"
+
+
 rule normalize_tss_quantification:
     message:
         "Filtering and TMM-normalising TSS counts"
@@ -812,6 +835,7 @@ rule normalize_tss_quantification:
         quant=OUTPUT_DIR + "/tss.consensus.homer.raw.txt",
         quant_in=OUTPUT_DIR + "/tss_merged/all_cs.tss_merged_quant_in.txt",
         bed=OUTPUT_DIR + "/tss.consensus.bed",
+        sizes=OUTPUT_DIR + "/tss.consensus.sizes.txt",
     output:
         bed=OUTPUT_DIR + "/tss.final.bed",
         raw=OUTPUT_DIR + "/tss.final.raw.txt",
@@ -826,6 +850,12 @@ rule normalize_tss_quantification:
         min_samples=config["filtering"].get("tss_min_samples", 1),
         min_cs_in_ratio=config["filtering"].get("tss_min_cs_in_ratio", 0),
         min_ratio_samples=config["filtering"].get("tss_min_ratio_samples", 1),
+        srna_sizes=" ".join(
+            str(int(x)) for x in config["filtering"].get("tss_srna_sizes", []) or []
+        ),
+        max_srna_fraction=config["filtering"].get("tss_max_srna_fraction", 0.5),
+        srna_min_reads=config["filtering"].get("tss_srna_min_reads", 30),
+        srna_min_samples=config["filtering"].get("tss_srna_min_samples", 1),
         cs_ids=" ".join(list(sampletab["id"][sampletab["sample_type"] == "csrna"])),
         paired_in_ids=" ".join(
             [

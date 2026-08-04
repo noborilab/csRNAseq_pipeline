@@ -25,6 +25,7 @@ All committed test data lives in `tests/data/`:
 | `mirnas.bed`, `trnas.bed` | One placeholder locus each |
 | `reads/*.r1.fq.gz` | 500 synthetic reads per sample (~5–10 KB each) |
 | `unit_fixtures/` | Hand-crafted TSVs for R-script unit tests |
+| `unit_fixtures/tagdir/` | Miniature HOMER tag directories whose read lengths are chosen so the read-size composition filter has a known right answer, alongside the expected `tss.consensus.sizes.txt` |
 
 ### Regenerating fixtures
 

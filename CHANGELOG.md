@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-04
+
+### Added
+- Read-size composition filter on the consensus TSS set, driven by four new
+  `filtering` config keys: `tss_srna_sizes` (array of read lengths, e.g.
+  `[21, 22, 23, 24, 25]`), `tss_max_srna_fraction` (default 0.5),
+  `tss_srna_min_reads` (default 30) and `tss_srna_min_samples` (default 1).
+  A TSS is dropped from `tss.final.bed` when more than `tss_max_srna_fraction`
+  of its reads fall in the listed sizes, in at least `tss_srna_min_samples`
+  csRNA libraries that have at least `tss_srna_min_reads` reads there.
+  Defaults to `[]`, which disables the filter.
+
+  This catches uncapped small RNAs that the existing filters cannot. In plants
+  the 21-25 nt siRNAs, above all the 24 nt Pol IV class over transposons,
+  survive TEX/AP well enough to be called as TSS clusters, and enrichment over
+  the input cannot reject them wherever the input library is too shallow to
+  measure a local background. Read length separates them from genuine
+  initiation, which is not confined to one small size class.
+- New rule `tss_size_composition` and script
+  `workflow/scripts/tss_size_composition.R`, measuring per-cluster read counts
+  and small-RNA-sized read counts from the HOMER tag directories into
+  `tss.consensus.sizes.txt`. The length column of the tag files supplies the
+  sizes, so no extra HOMER run is needed. When `tss_srna_sizes` is empty the
+  rule writes the cluster list and does not read the tag directories at all.
+- Unit test `tests/unit/size_composition.smk` with tag-directory fixtures, plus
+  two further `normalize` invocations covering the new filter at
+  `tss_srna_min_samples` 1 and 2.
+
+### Changed
+- `normalize_tss_quantification` now stops with an explanatory message when the
+  filters leave no TSSs at all, rather than failing inside edgeR with
+  "'counts' must contain at least one value".
+
+### Fixed
+- `tests/scripts/generate_unit_fixtures.py` writes the `RawReads` and
+  `TrimmedReads` stats columns added in 0.3.0, so the `qc_initial` and
+  `qc_final` unit tests pass again.
+- `tests/run_tests.sh` propagates unit-test failures out of `run_unit_smk`
+  instead of returning the status of its last conditional, which had been
+  reporting failed assertions as passes.
+
 ## [0.4.0] - 2026-05-13
 
 ### Changed

@@ -86,3 +86,32 @@ class TestConfigSchema:
         cfg["filtering"]["tss_min_cpm"] = 1.5
         cfg["filtering"]["tss_min_samples"] = 3
         validate(cfg, CONFIG_SCHEMA)
+
+    def test_srna_size_keys_accepted(self):
+        """The read-size composition filter keys are accepted in config."""
+        from snakemake.utils import validate
+        with open(os.path.join(REPO, "tests", "data", "config.yaml")) as fh:
+            cfg = yaml.safe_load(fh)
+        cfg["filtering"]["tss_srna_sizes"] = [21, 22, 23, 24, 25]
+        cfg["filtering"]["tss_max_srna_fraction"] = 0.5
+        cfg["filtering"]["tss_srna_min_reads"] = 30
+        cfg["filtering"]["tss_srna_min_samples"] = 2
+        validate(cfg, CONFIG_SCHEMA)
+
+    def test_srna_sizes_must_be_integers(self):
+        """tss_srna_sizes given as strings must fail validation."""
+        from snakemake.utils import validate
+        with open(os.path.join(REPO, "tests", "data", "config.yaml")) as fh:
+            cfg = yaml.safe_load(fh)
+        cfg["filtering"]["tss_srna_sizes"] = ["21", "22"]
+        with pytest.raises(Exception):
+            validate(cfg, CONFIG_SCHEMA)
+
+    def test_max_srna_fraction_is_bounded(self):
+        """tss_max_srna_fraction above 1 must fail validation."""
+        from snakemake.utils import validate
+        with open(os.path.join(REPO, "tests", "data", "config.yaml")) as fh:
+            cfg = yaml.safe_load(fh)
+        cfg["filtering"]["tss_max_srna_fraction"] = 1.5
+        with pytest.raises(Exception):
+            validate(cfg, CONFIG_SCHEMA)
