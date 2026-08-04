@@ -115,88 +115,42 @@ as true and false positives to choose the enrichment threshold for each library.
 back to `default_log2_fold` silently: the only sign in the log is
 
 ```
-Skipping TSS assignment (can't find file for genome genome.fa)
 Total TP (tss) regions: 0     Total FP (exon) regions: 0
+Maximum CDF difference: -10000000000
 Using the default input threshold (1)
 ```
 
 and `Fraction Promoter-Distal TSS clusters: 100.00%` with
 `Fraction of stable transcript TSS clusters: 0.00%` in every `tss.txt`, which are
-placeholders rather than results. Supplying a GTF turns all of that on. It is the largest
-single quality lever in the configuration, and it **changes your TSS calls**, so compare a
-GTF run against your existing consensus before adopting it rather than swapping mid-project.
+placeholders rather than results.
+
+With a GTF, the same library reports non-empty sets and a threshold chosen from the data.
+On the synthetic test genome:
+
+```
+Custom annotation GTF file: .../annotation.gtf (using transcript_id)
+Total TP (tss) regions: 15     Total FP (exon) regions: 5
+Maximum CDF difference: 0.8
+log2 fold vs. input: 0.415031488137169
+```
+
+Ignore the `Skipping TSS assignment (can't find file for genome ...)` line while judging
+this: it comes from the `annotatePeaks` calls inside HOMER wanting a full HOMER genome
+directory for their own TSS-distance annotation, and it appears whether or not `-gtf` was
+given. The TP and FP counts are the signal.
+
+Supplying a GTF is the largest single quality lever in the configuration, and it **changes
+your TSS calls**, so compare a GTF run against your existing consensus before adopting it
+rather than swapping mid-project.
 
 ```yaml
 program:
   homer:
     tss:
       gtf: "/path/to/annotation.gtf"
-      rnaseq_tagdir: "/path/to/rnaseq_tagdir"   # optional, enables HOMER's stable-RNA filter
 ```
 
-`rnaseq_tagdir` passes `-rna`, which lets HOMER discard putative TSSs that look like
-processed or exonic RNA. Both default to empty, which is the pipeline's previous behaviour.
-
-Two things to know about it. First, **it is a tag directory, not FASTQ, and the pipeline
-cannot build it for you.** RNA-seq reads are spliced and longer than csRNA reads, while the
-trim step caps reads at `filtering / max_read_length` (70 by default) and the aligners are
-configured for short unspliced reads (`bwa-aln`, or STAR with `align_intron_max: 1`). Sending
-mRNA-seq through that path would quietly give you a wrong tag directory, with junction-spanning
-reads lost and everything truncated. Align your RNA-seq separately with a splice-aware aligner,
-build the tag directory with `makeTagDirectory` or `bam2td`, and point here. The path is checked
-for a `tagInfo.txt` at start-up, because a wrong path otherwise fails deep inside HOMER.
-
-Second, **`-rna` filters, it does not merely annotate.** On the synthetic test data it took
-putative clusters passing the RNA check from 29 down to 17 passing both checks. Set
-`rnaseq_stability_only: true` to pass HOMER's `-noFilterRNA` instead, which uses the RNA-seq
-only for the stable-transcript columns; that is a good way to see how much it would remove
-before letting it remove anything.
-
-#### Building the RNA-seq tag directory
-
-Three steps, done once, outside the pipeline. Use the same genome as your csRNA run, and
-check that chromosome names match your `chrom_sizes`.
-
-```bash
-# 1. Align with a splice-aware aligner. STAR or HISAT2; not the pipeline's bwa-aln.
-STAR --genomeDir /path/to/star_index \
-     --readFilesIn rnaseq_R1.fq.gz rnaseq_R2.fq.gz --readFilesCommand zcat \
-     --outSAMtype BAM SortedByCoordinate --outFileNamePrefix rnaseq.
-# or:  hisat2 -x /path/to/hisat2_index -1 rnaseq_R1.fq.gz -2 rnaseq_R2.fq.gz \
-#        | samtools sort -o rnaseq.bam
-
-# 2. Build the tag directory, with the same tool the pipeline uses for csRNA.
-bam2td /path/to/rnaseq_tagdir rnaseq.Aligned.sortedByCoord.out.bam \
-    -genome /path/to/genome.fa
-# makeTagDirectory works equally well if you prefer it.
-```
-
-```yaml
-# 3. Point the config at it.
-program:
-  homer:
-    tss:
-      rnaseq_tagdir: "/path/to/rnaseq_tagdir"
-```
-
-**Get the strand right.** HOMER assumes a tag directory represents RNA in sense orientation,
-and the sense / antisense read densities are what the stable-transcript call rests on, so a
-flipped library makes those calculations meaningless rather than merely noisy. Most stranded
-protocols (dUTP) put read 1 antisense to the transcript. `bam2td` and `makeTagDirectory` both
-take `-flip` (flip everything) and `-sspe` (strand-specific paired-end: flip read 2). Rather
-than trusting a guess about your kit, build the directory, make a bigWig from it, and look at
-a few genes you know the orientation of: the coverage should sit on the transcript's own
-strand.
-
-Any RNA-seq alignment you already have works, as long as it is the same genome build and
-chromosome naming. There is no need for it to come from the same experiment, though matched
-tissue obviously makes the stability call more meaningful.
-
-**You lose little by skipping this.** The GTF alone gives the whole threshold-selection
-benefit: on the test data, `-gtf` on its own produces the same true and false positive sets
-(15 and 5) and the same chosen input threshold (0.415) as `-gtf` plus `-rna`. RNA-seq only
-adds the stable-transcript filter on top. So if you have an annotation but no RNA-seq, set
-`gtf` and leave `rnaseq_tagdir` empty.
+Empty by default, which is the pipeline's previous behaviour.
 
 ### `program / homer / tss / program`, `pseudo_count`, `default_log2_fold`, `local_fold`
 

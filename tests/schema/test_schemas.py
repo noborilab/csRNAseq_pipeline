@@ -135,12 +135,11 @@ class TestConfigSchema:
             validate(cfg, CONFIG_SCHEMA)
 
     def test_tss_annotation_and_program_keys_accepted(self):
-        """The optional GTF, RNA-seq tagdir, program choice and HOMER knobs validate."""
+        """The optional GTF, program choice and HOMER knobs validate."""
         from snakemake.utils import validate
         with open(os.path.join(REPO, "tests", "data", "config.yaml")) as fh:
             cfg = yaml.safe_load(fh)
         cfg["program"]["homer"]["tss"]["gtf"] = "tests/data/genome.fa"
-        cfg["program"]["homer"]["tss"]["rnaseq_tagdir"] = "tests/data"
         cfg["program"]["homer"]["tss"]["program"] = "findcsRNATSR.pl"
         cfg["program"]["homer"]["tss"]["pseudo_count"] = 3
         cfg["program"]["homer"]["tss"]["default_log2_fold"] = 2

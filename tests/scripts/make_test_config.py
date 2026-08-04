@@ -35,8 +35,6 @@ def main():
                    help="Set filtering.exclude_failed_from_consensus")
     p.add_argument("--gtf", default=None,
                    help="Set program/homer/tss/gtf (repo-relative path)")
-    p.add_argument("--rnaseq-tagdir", default=None,
-                   help="Set program/homer/tss/rnaseq_tagdir")
     p.add_argument("--alignment-program",
                    choices=["bwa-aln", "bwa-mem", "STAR", "bowtie2", "hisat2"],
                    default=None)
@@ -83,8 +81,6 @@ def main():
         cfg["filtering"]["exclude_failed_from_consensus"] = True
     if args.gtf is not None:
         cfg["program"]["homer"]["tss"]["gtf"] = abs_fixture(args.gtf)
-    if args.rnaseq_tagdir is not None:
-        cfg["program"]["homer"]["tss"]["rnaseq_tagdir"] = args.rnaseq_tagdir
     if args.alignment_program is not None:
         cfg["program"]["alignment_program"] = args.alignment_program
         # STAR's SA pre-indexing string must satisfy genomeSAindexNbases ≤ log2(L)/2-1.

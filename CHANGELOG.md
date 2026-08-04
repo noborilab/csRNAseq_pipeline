@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-04
+
+### Removed
+- `program/homer/tss/rnaseq_tagdir` and `rnaseq_stability_only`, so HOMER's `-rna`
+  is no longer wired in. `-gtf` stays, and it carries the whole benefit anyway:
+  measured on the test genome, `-gtf` alone yields the same true and false positive
+  sets (15 and 5) and the same chosen input threshold (0.415) as `-gtf` with `-rna`,
+  because the RNA-seq side only adds the stable-transcript filter on top. Dropping it
+  removes an option that required users to build a HOMER tag directory by hand with a
+  splice-aware aligner, since this pipeline's trim and alignment settings cannot make
+  one correctly, along with a strand-orientation trap that would have made the
+  stability call meaningless rather than merely noisy if got wrong.
+- The end-to-end step and wiring assertions now cover `-gtf` only.
+
+### Fixed
+- The README no longer cites `Skipping TSS assignment (can't find file for genome ...)`
+  as evidence that the annotation is missing. That line comes from the `annotatePeaks`
+  calls inside HOMER wanting a full genome directory and appears whether or not `-gtf`
+  was given; the usable signal is the TP and FP counts, and the documentation now shows
+  the before and after for both.
+
 ## [0.8.1] - 2026-08-04
 
 ### Fixed

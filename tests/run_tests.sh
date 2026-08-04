@@ -296,20 +296,14 @@ run_e2e() {
         2>&1
     python tests/e2e/assertions.py "$tmp2" --filter-pass
 
-    # The optional HOMER annotation inputs. -rna needs a tag directory, which the pipeline
-    # cannot build (RNA-seq is spliced and longer than csRNA), so reuse one from the run
-    # above as a stand-in, copied outside the output tree so it is not mistaken for a
-    # make_tagdir output.
+    # The optional GTF. Asserted on HOMER's own report rather than on the flag being
+    # present, since -gtf is easy to wire up so that it looks fine and does nothing.
     echo ""
-    echo "--- e2e: optional -gtf and -rna wiring ---"
-    local tmp3 cfg3 rnadir
+    echo "--- e2e: optional -gtf wiring ---"
+    local tmp3 cfg3
     tmp3=$(mktemp -d)
-    rnadir=$(mktemp -d)/rna_tagdir
-    mkdir -p "$(dirname "$rnadir")"
-    cp -r "$tmp/tagdir/condA_input1" "$rnadir"
-    cfg3=$(make_cfg "$tmp3" "$tmp3" "$tmp3/index/genome.fa" \
-        --gtf tests/data/annotation.gtf --rnaseq-tagdir "$rnadir")
-    trap "rm -rf $tmp3 $cfg3 $(dirname "$rnadir")" EXIT
+    cfg3=$(make_cfg "$tmp3" "$tmp3" "$tmp3/index/genome.fa" --gtf tests/data/annotation.gtf)
+    trap "rm -rf $tmp3 $cfg3" EXIT
 
     snakemake \
         --cores 4 \

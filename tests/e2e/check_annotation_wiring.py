@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Check that the optional HOMER annotation inputs are actually reaching HOMER.
+Check that the optional GTF is actually reaching HOMER and changing what it does.
 
     python tests/e2e/check_annotation_wiring.py <e2e output dir>
 
-Both options are easy to wire up in a way that looks fine and does nothing: the pipeline
-would still run, the outputs would still appear, and the only sign that -gtf never arrived
-would be a placeholder line buried in a per-sample log. So assert on HOMER's own report
-rather than on the option being present in the config.
+-gtf is easy to wire up in a way that looks fine and does nothing: the pipeline would still
+run, the outputs would still appear, and the only sign it never arrived would be a
+placeholder line buried in a per-sample log. So assert on HOMER's own report rather than on
+the option being present in the config.
 """
 
 import glob
@@ -59,23 +59,9 @@ def main(outdir):
     if "cmd = " not in text:
         fail("no cmd line in the stats file")
     cmd = next(l for l in text.splitlines() if l.startswith("cmd = "))
-    for flag in ("-gtf", "-rna"):
-        if flag not in cmd:
-            fail(f"{flag} missing from the HOMER command line: {cmd}")
-    ok("HOMER was invoked with both -gtf and -rna")
-
-    # -rna is a filter, not just an annotation: the RNA column should reject something, or
-    # at least be reported as a real threshold rather than the -1e10 no-op sentinel.
-    if "log2 fold vs. rna: -10000000000" in text:
-        fail("RNA-seq threshold is the no-op sentinel, so -rna was not used")
-    ok("HOMER applied an RNA-seq enrichment threshold")
-
-    for line in text.splitlines():
-        if line.strip().startswith("total over rna"):
-            ok(f"HOMER reported RNA filtering: {line.strip()}")
-            break
-    else:
-        fail("no 'total over rna' line in the stats file")
+    if "-gtf" not in cmd:
+        fail(f"-gtf missing from the HOMER command line: {cmd}")
+    ok("HOMER was invoked with -gtf")
 
     print()
     print("All annotation-wiring assertions passed.")

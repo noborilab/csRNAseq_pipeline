@@ -225,34 +225,6 @@ properties:
                   here, but it changes TSS calls, so compare against your
                   existing consensus before adopting it. Empty means no
                   annotation, which is the previous behaviour.
-              rnaseq_tagdir:
-                type: string
-                default: ""
-                description: >
-                  Optional RNA-seq HOMER tag directory passed as -rna. Lets HOMER
-                  run its stable-transcript filter, which removes putative TSSs
-                  that look like processed or exonic RNA rather than initiation.
-                  Empty disables it, which is the previous behaviour.
-
-                  This is a tag directory, not FASTQ, and the pipeline cannot build
-                  it for you: RNA-seq reads are spliced and longer than csRNA reads,
-                  while the trim step caps reads at filtering/max_read_length and the
-                  aligners are configured for short unspliced reads (bwa-aln, or STAR
-                  with align_intron_max 1). Build it separately with a splice-aware
-                  aligner plus makeTagDirectory or bam2td, then point here. The path
-                  is checked for a tagInfo.txt at start-up, because otherwise a wrong
-                  path fails deep inside HOMER.
-              rnaseq_stability_only:
-                type: boolean
-                default: False
-                description: >
-                  Pass HOMER's -noFilterRNA, so the RNA-seq data is used only for the
-                  stable-transcript annotation columns and not to filter putative
-                  TSSs. Default False, which is HOMER's own behaviour: supplying
-                  rnaseq_tagdir does remove TSSs. Worth knowing that it is a filter
-                  and not just an annotation, and worth setting this to true for a
-                  first look at how much it would remove. Ignored when
-                  rnaseq_tagdir is empty.
               program:
                 type: string
                 enum: ["findcsRNATSS.pl", "findcsRNATSR.pl"]
