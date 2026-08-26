@@ -124,6 +124,68 @@ def assert_stats_placeholders(outdir: str) -> None:
     ok(f"placeholder fractions read na in all {len(stats)} stats files")
 
 
+def read_aln_summary(path: str) -> dict:
+    counts = {}
+    with open(path) as fh:
+        for line in fh:
+            parts = line.rstrip("\n").split("\t")
+            if parts[0] != "MAPQ" and len(parts) == 2:
+                counts[parts[0]] = int(float(parts[1]))
+    return counts
+
+
+def assert_alignment_accounting(outdir: str, cs_samples, in_samples) -> None:
+    """Every trimmed read is accounted for between trimming and the tag directory.
+
+    This is the loss the QC could not see before: on one Arabidopsis panel a median
+    74.9% of trimmed reads vanished between TrimmedReads and TotalReads with nothing
+    recording whether they failed to align, fell below the MAPQ floor, or were dropped
+    by a flag or length filter. The three checks here are that the counts partition the
+    reads, that they add up to what the pipeline kept, and that the QC table carries the
+    same numbers as the summary it was scraped from.
+    """
+    for s in cs_samples + in_samples:
+        counts = read_aln_summary(os.path.join(outdir, "qc", f"{s}.aln.raw.txt"))
+        if counts["ReadsSeen"] != counts["Unmapped"] + counts["PrimaryMapped"]:
+            fail(f"{s}: ReadsSeen {counts['ReadsSeen']} != Unmapped "
+                 f"{counts['Unmapped']} + PrimaryMapped {counts['PrimaryMapped']}")
+        parts = counts["BelowMapq"] + counts["FailedOtherFilters"] + counts["Passed"]
+        if counts["PrimaryMapped"] != parts:
+            fail(f"{s}: PrimaryMapped {counts['PrimaryMapped']} != BelowMapq + "
+                 f"FailedOtherFilters + Passed ({parts})")
+    ok(f"alignment summaries partition the reads for all "
+       f"{len(cs_samples) + len(in_samples)} libraries")
+
+    for fname, ids in (("qc/stats_initial_cs.txt", cs_samples),
+                       ("qc/stats_initial_in.txt", in_samples)):
+        with open(os.path.join(outdir, fname)) as fh:
+            rows = {r["Sample"]: r for r in csv.DictReader(fh, delimiter="\t")}
+        for s in ids:
+            row = rows[s]
+            counts = read_aln_summary(os.path.join(outdir, "qc", f"{s}.aln.raw.txt"))
+            for col, key in (("AlignedReads", "PrimaryMapped"),
+                             ("BelowMapqReads", "BelowMapq"),
+                             ("FilteredOutReads", "FailedOtherFilters")):
+                if int(float(row[col])) != counts[key]:
+                    fail(f"{fname}: {s} {col} is {row[col]}, but the alignment summary "
+                         f"says {key} is {counts[key]}")
+            trimmed = int(float(row["TrimmedReads"]))
+            aligned = int(float(row["AlignedReads"]))
+            total = int(float(row["TotalReads"]))
+            if counts["ReadsSeen"] != trimmed:
+                fail(f"{s}: the aligner saw {counts['ReadsSeen']} reads but trimming "
+                     f"wrote {trimmed}; the alignment accounting is incomplete")
+            if aligned > trimmed:
+                fail(f"{s}: AlignedReads {aligned} exceeds TrimmedReads {trimmed}")
+            if aligned < total:
+                fail(f"{s}: AlignedReads {aligned} is below TotalReads {total}, so the "
+                     "tag directory holds reads the aligner never reported")
+            if counts["Passed"] < total:
+                fail(f"{s}: {counts['Passed']} reads passed the filter but the tag "
+                     f"directory holds {total}")
+    ok("QC tables agree with the alignment summaries, and the loss adds up")
+
+
 def main(outdir: str, filter_pass: bool, skip_golden: bool = False,
          no_annotation: bool = False) -> None:
     print(f"Checking outputs in: {outdir}")
@@ -176,6 +238,8 @@ def main(outdir: str, filter_pass: bool, skip_golden: bool = False,
             fail(f"{label} has {actual} data rows, expected {expected_n}")
         ok(f"{label} has {expected_n} rows")
 
+    assert_alignment_accounting(outdir, cs_samples, ["condA_input1", "condA_input2"])
+
     # qc_final_cs.txt must have all expected columns
     import csv
     with open(os.path.join(outdir, "qc_final_cs.txt")) as fh:
@@ -186,6 +250,7 @@ def main(outdir: str, filter_pass: bool, skip_golden: bool = False,
         "csRiP", "sRiP", "csFRiP", "sFRiP", "csRNACappedPct", "csEnrichment", "sDepletion",
         "miRNA", "miRNADepletion", "miRNAPct", "PretRNA", "PretRNAPct", "PhosEfficiency",
         "group", "RawReads", "TrimmedReads",
+        "AlignedReads", "BelowMapqReads", "FilteredOutReads",
     ):
         if col not in header:
             fail(f"qc_final_cs.txt missing column: {col}")

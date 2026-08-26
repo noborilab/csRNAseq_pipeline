@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `AlignedReads`, `BelowMapqReads` and `FilteredOutReads` in the stats and QC tables,
+  between `TrimmedReads` and `TotalReads`. That gap is the largest single loss anywhere in
+  the pipeline (a median 74.9% per library, 2,149 M of 2,954 M reads, on one 34-library
+  panel) and nothing recorded where it went. Three things could account for it with
+  opposite implications, and the QC could not tell them apart: reads that never aligned,
+  reads below `filtering/alignment_mapq`, and reads dropped by `exclude_flags`,
+  `min_alignment_length` or `max_mismatch`. The counts come from a new pass-through awk in
+  the alignment pipe, since the unfiltered alignment is never written to disk and the
+  flagstat the pipeline keeps runs on the filtered BAM, so it reports 100% mapped for
+  every library. Full per-library detail, including a MAPQ histogram, lands in
+  `qc/<sample>.aln.raw.txt`.
+- `program/keep_unmapped_sample`, an integer, default 0: when above zero, keep that many
+  unmapped reads per library as `qc/<sample>.unmapped.sample.fastq.gz`. With `keep_bam`
+  and `keep_trimmed_fastq` off, nothing about the unaligned fraction survives a run, so a
+  contaminant screen afterwards means aligning again.
+- STAR's `Log.final.out` is kept rather than deleted, appended to
+  `qc/<sample>.aligner.log`. STAR keeps unmapped reads out of its BAM entirely, so its own
+  report is the only place its read accounting exists, and the new summary reads the input
+  read count from it.
+- A README caveat that every per-class QC figure (`PretRNAPct`, `miRNAPct`, any rRNA
+  number) is computed from the filtered BAM and therefore measures the unique-mapping tail
+  of those species rather than their abundance.
 - `qc/min_cs_frip_final` and `qc/min_pct_nuclear_final`, gates for the final QC table.
   Both tables report `csFRiP`, but they measure it against different regions (the initial
   merged TSS set against `tss.final.bed`), so one number cannot serve both: every
@@ -23,6 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one.
 
 ### Changed
+- `rule align` runs a counter in the alignment pipe, so its shell command has changed and
+  Snakemake will want to realign existing runs. The alignment itself is untouched: the awk
+  passes the stream through byte for byte, which the test suite asserts.
 - `tss/<sample>.stats.txt` is now post-processed by `find_tss_initial`, and is a declared
   output of that rule rather than an untracked side effect. HOMER writes
   `Fraction of stable transcript TSS clusters: 0.00%` and, with no annotation,

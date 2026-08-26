@@ -290,7 +290,7 @@ run_unit_smk() {
 }
 
 run_unit() {
-    for rule in normalize size_composition collect_consensus qc_initial qc_final; do
+    for rule in normalize size_composition collect_consensus qc_initial qc_final aln_summary; do
         run_step "unit/$rule" run_unit_smk "$rule"
     done
 }

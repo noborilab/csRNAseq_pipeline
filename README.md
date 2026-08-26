@@ -195,6 +195,28 @@ filtering:
 `qc / min_pct_nuclear`. Consider `tss_min_reps: 2` alongside it, so that no single library
 can inject a cluster on its own.
 
+### `program / keep_unmapped_sample`
+
+Number of unmapped reads to keep per library, as `qc/{sample}.unmapped.sample.fastq.gz`.
+Default 0 writes nothing.
+
+Two thirds of a csRNA-seq library can be lost at alignment (a median 74.9% per library on
+one Arabidopsis panel), and with `keep_bam`, `keep_trimmed_fastq` and
+`bwa_aln / keep_sai` all false, neither the aligned nor the unaligned reads survive the
+run, so a contaminant screen or a low-complexity check afterwards means aligning again.
+A few hundred thousand reads costs a few MB and answers the question.
+
+```yaml
+program:
+  keep_unmapped_sample: 200000
+```
+
+`qc/{sample}.aln.raw.txt` says how large that loss is and how it splits between reads that
+never aligned, reads below the MAPQ floor and reads dropped by the flag and length
+filters; the same three numbers appear in the QC tables as `AlignedReads`,
+`BelowMapqReads` and `FilteredOutReads`. This sample is for asking what the unaligned
+reads actually are.
+
 ### `qc / min_cs_frip_final` and `qc / min_pct_nuclear_final`
 
 The initial and final QC tables both report `csFRiP`, but they measure it against
@@ -307,11 +329,11 @@ changing it re-runs the `tss_size_composition` rule.
 |------|-------------|
 | `build_index` | (Conditional) Build a genome index for the selected aligner from `genome_fasta` if no index is found at `genome_index`. |
 | `trim` | Adapter trimming and length truncation (bfqutils). Stats written to `qc/`. |
-| `align` | Genome alignment (bwa-aln / bwa-mem / STAR / bowtie2 / hisat2), MAPQ and length filtering, BAM sorting and indexing. |
+| `align` | Genome alignment (bwa-aln / bwa-mem / STAR / bowtie2 / hisat2), MAPQ and length filtering, BAM sorting and indexing. Counts the unfiltered alignment on the way past into `qc/{sample}.aln.raw.txt`, which is where the reads lost at this step are accounted for. |
 | `make_tagdir` | Tag directory from BAM (bam2td). |
 | `find_tss_initial` | Per-sample TSS calling (HOMER `findcsRNATSS.pl`) using the paired input library as background. Run on both csRNA and input samples. |
 | `make_raw_bedgraph` | Strand-separated raw bedGraph files (HOMER `makeUCSCfile`). |
-| `gather_stats` | Extract total reads, organellar reads, and tag frequencies from HOMER tagInfo files. |
+| `gather_stats` | Extract total reads, organellar reads, and tag frequencies from HOMER tagInfo files, plus the alignment loss (`AlignedReads`, `BelowMapqReads`, `FilteredOutReads`) from the per-library alignment summaries. |
 | `merge_initial_tss` | Strand-aware merge of all per-sample TSS BEDs. Chromosomes not in `chrom_sizes` are excluded. |
 | `quantify_initial_{cs,in}_tss` | HOMER `annotatePeaks.pl` quantification of merged TSS sets in all libraries. |
 | `qc_initial_tss` | Calculate FRiP, nuclear read %, csRNA enrichment, miRNA depletion, and phosphorylation efficiency. Samples with FRiP < `min_cs_frip` or nuclear % < `min_pct_nuclear` are flagged as FAIL, with `StatusReason` naming the gates that tripped. The gates reach the script as rule params, so editing one and rerunning with `--rerun-triggers params` (Snakemake's default set includes `params`) recomputes the table. |
@@ -345,12 +367,14 @@ All outputs land in `files / output_dir` (default: `results/`):
 | `qc_final_cs.txt` | Per-sample QC metrics for csRNA libraries re-derived from the filtered `tss.final.bed`. Same columns as `qc_initial_cs.txt` plus `FinalTSSDetected`, `NConsensusTSS`, `NFinalTSS` and `NFilteredTSS`. All metrics are re-computed from raw counts, not copied from the initial QC, so `csRiP` / `csFRiP` / `csEnrichment` here refer to the **final** TSS set while the same names in `qc_initial_cs.txt` refer to the initial merged set. Do not compare the two files column-by-column. |
 | `qc_final_in.txt` | Per-sample QC metrics for input libraries, augmented with `Final*` columns. |
 | `qc/replicate_correlation.txt` | Pairwise Spearman and Pearson correlations between csRNA replicates of the same `sample_name`, for both the initial TSS set (Stage=Initial) and the filtered set (Stage=Final). Empty if no `sample_name` has ≥ 2 replicates. |
-| `qc/stats_initial_cs.txt` | Raw alignment and tag-count statistics for csRNA libraries (TotalReads, OrganelleReads, PosReads, NegReads). |
+| `qc/stats_initial_cs.txt` | Raw alignment and tag-count statistics for csRNA libraries (RawReads, TrimmedReads, AlignedReads, BelowMapqReads, FilteredOutReads, TotalReads, OrganelleReads, PosReads, NegReads). |
 | `qc/stats_initial_in.txt` | Raw alignment and tag-count statistics for input libraries. |
 | `tss/{sample}.stats.txt` | HOMER's own per-library report from TSS calling: cluster counts, the enrichment threshold it chose (`log2 fold vs. input`), and the true/false-positive set sizes it chose it from. Post-processed by the pipeline: the promoter-distal and stable-transcript fractions are rewritten to `na` when HOMER had no annotation and no RNA-seq to compute them from, since it otherwise reports its placeholders (100.00% and 0.00%) as though they were measurements. Anything parsing this file should expect `na` in those two positions. |
 | `qc/{sample}.trimming.txt` | bfqutils trimming summary. |
-| `qc/{sample}.aln.txt` | samtools flagstat alignment summary. |
-| `qc/{sample}.aligner.log` | Aligner stderr (bwa/STAR/bowtie2/hisat2). |
+| `qc/{sample}.aln.txt` | samtools flagstat, run on the **filtered** BAM. It therefore reports 100% mapped for every library and says nothing about what the filter removed; `aln.raw.txt` is the file that does. |
+| `qc/{sample}.aln.raw.txt` | Accounting of the unfiltered alignment: reads seen, unmapped, secondary, supplementary, reads with a primary alignment, then how many of those fell below the MAPQ floor, failed the remaining filters, and passed. Ends with a MAPQ histogram and the filter settings in force. Counted in the pipe, since the unfiltered alignment is never written to disk. |
+| `qc/{sample}.unmapped.sample.fastq.gz` | A sample of unmapped reads, only when `program / keep_unmapped_sample` is above zero. |
+| `qc/{sample}.aligner.log` | Aligner stderr (bwa/STAR/bowtie2/hisat2). For STAR, `Log.final.out` is appended to it. |
 
 ## QC Metrics
 
@@ -358,6 +382,9 @@ The `qc_initial_cs.txt` / `qc_initial_in.txt` tables contain the columns below. 
 
 | Column | Description |
 |--------|-------------|
+| `AlignedReads` | Reads with a primary alignment, counted before filtering. `TrimmedReads` minus this is the reads that never aligned. |
+| `BelowMapqReads` | Aligned reads discarded by `filtering / alignment_mapq`, which in practice means multi-mappers. |
+| `FilteredOutReads` | Aligned reads that cleared MAPQ and were then discarded by `exclude_flags`, `include_flags`, `min_alignment_length` or `max_mismatch`. |
 | `csFRiP` | Fraction of nuclear reads falling in csRNA-called TSSs. Should be > 0.9 for a good csRNA library. |
 | `sFRiP` | Fraction of nuclear reads in input-called (small RNA) TSSs. |
 | `PctNuclear` | Percentage of reads mapping to nuclear chromosomes (i.e. excluding `qc / organelle_chroms`). |
@@ -401,6 +428,15 @@ the signal is, so a library that puts more of its reads into TSSs duplicates mor
 depth. On one Arabidopsis panel the *least* duplicated library was among the two worst by
 every other measure, because its reads were scattered over degradation background. If you
 want complexity, compare distinct positions at a matched depth restricted to real promoters.
+
+**Every per-class figure counts uniquely-mapping reads only.** All of them are computed
+from the filtered BAM, which is past the MAPQ floor, so `PretRNAPct`, `miRNAPct` and any
+rRNA figure measure the unique-mapping tail of those species rather than their abundance.
+On one Arabidopsis panel rRNA came out at 0.07% of aligned 5′ ends, which is not credible
+for a total-RNA-derived library and is better read as evidence that the rRNA is in the
+discarded multi-mapping fraction: TAIR12 assembles the rDNA arrays as roughly 4,800 rRNA
+gene entries, which no short read can place uniquely. `BelowMapqReads` is how much of the
+library that fraction is.
 
 **`csEnrichment` is not a reliable discriminator at these group sizes.** On a panel of two to
 three libraries per condition it could not separate 1.97 from 2.00 for a treatment that

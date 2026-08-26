@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-printf "Sample\tRawReads\tTrimmedReads\tTotalReads\tOrganelleReads\tFreq1A\tPosReads\tNegReads\n" > "$OUT"
+printf "Sample\tRawReads\tTrimmedReads\tAlignedReads\tBelowMapqReads\tFilteredOutReads\tTotalReads\tOrganelleReads\tFreq1A\tPosReads\tNegReads\n" > "$OUT"
 for i in "$@"; do
     if [[ ! -f "$OUT_PREFIX/$i/tagInfo.txt" ]]; then
         echo "ERROR: tagInfo.txt not found for sample $i (${OUT_PREFIX}/${i}/tagInfo.txt)" >&2
@@ -18,6 +18,21 @@ for i in "$@"; do
     printf "\t" >> "$OUT"
     awk '/^Output/{gsub(",","",$0); s+=$2} END{print s+0}' "$LOG_PREFIX/${i}.trimming.txt" | tr -d '\n' >> "$OUT"
     printf "\t" >> "$OUT"
+    # Where the reads between TrimmedReads and TotalReads went, from aln_summary.awk,
+    # which counted the unfiltered alignment stream: reads with a primary alignment, then
+    # how many of those the MAPQ filter and the remaining filters (flags, alignment
+    # length, mismatches) discard. The flagstat in ${i}.aln.txt cannot answer this because
+    # it runs on the already-filtered BAM.
+    aln_raw="$LOG_PREFIX/${i}.aln.raw.txt"
+    if [[ ! -f "$aln_raw" ]]; then
+        echo "ERROR: alignment summary not found for sample $i ($aln_raw)" >&2
+        exit 1
+    fi
+    for key in PrimaryMapped BelowMapq FailedOtherFilters; do
+        awk -F'\t' -v k="$key" '$1 == k {print $2; found = 1}
+            END {if (!found) print "NA"}' "$aln_raw" | tr -d '\n' >> "$OUT"
+        printf "\t" >> "$OUT"
+    done
     grep "^genome=" "$OUT_PREFIX/$i/tagInfo.txt" | cut -f3 | tr -d '\n' >> "$OUT"
     printf "\t" >> "$OUT"
     # Summed and rounded inside awk, not in the shell: HOMER writes tag counts as floats,

@@ -87,6 +87,18 @@ properties:
         description: >
           Retain sorted BAM files after HOMER tag directory creation. Set
           to false to have Snakemake delete them automatically.
+      keep_unmapped_sample:
+        type: integer
+        minimum: 0
+        default: 0
+        description: >
+          When above zero, keep this many unmapped reads per library as
+          qc/<sample>.unmapped.sample.fastq.gz. Two thirds of a csRNA-seq
+          library can be lost at alignment, and with keep_bam and
+          keep_trimmed_fastq off none of it survives the run, so a
+          contaminant screen or a low-complexity check afterwards means
+          aligning again. A few hundred thousand reads costs a few MB and
+          answers the question. Default 0 writes nothing.
       bwa_aln:
         type: object
         properties:

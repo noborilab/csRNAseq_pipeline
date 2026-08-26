@@ -1,4 +1,4 @@
-Sample	RawReads	TrimmedReads	TotalReads	OrganelleReads	Freq1A	PosReads	NegReads
-condA_csrna1	550	510	500	0	0.8	400	100
-condA_csrna2	530	490	480	0	0.75	360	120
-condB_csrna1	570	530	520	0	0.82	426	94
+Sample	RawReads	TrimmedReads	AlignedReads	BelowMapqReads	FilteredOutReads	TotalReads	OrganelleReads	Freq1A	PosReads	NegReads
+condA_csrna1	550	510	505	3	2	500	0	0.8	400	100
+condA_csrna2	530	490	486	4	2	480	0	0.75	360	120
+condB_csrna1	570	530	526	4	2	520	0	0.82	426	94

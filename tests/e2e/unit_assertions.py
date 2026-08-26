@@ -203,7 +203,8 @@ def assert_qc_initial(outdir: str, expect_status: str = None,
     # Required columns present in qc_initial_cs.txt
     with open(qc_cs_path) as fh:
         hdr = fh.readline().strip().split("\t")
-    for col in ("csFRiP", "csEnrichment", "TSSDetected", "group", "RawReads", "TrimmedReads"):
+    for col in ("csFRiP", "csEnrichment", "TSSDetected", "group", "RawReads", "TrimmedReads",
+                "AlignedReads", "BelowMapqReads", "FilteredOutReads"):
         if col not in hdr:
             fail(f"qc_initial_cs.txt missing column: {col}")
     ok("qc_initial_cs.txt has expected columns")
@@ -235,6 +236,7 @@ def assert_qc_final(outdir: str, expect_status: str = None,
         "NConsensusTSS", "NFinalTSS", "NFilteredTSS", "FinalTSSDetected",
         "csRiP", "sRiP", "csFRiP", "sFRiP", "csRNACappedPct", "csEnrichment", "sDepletion",
         "group", "RawReads", "TrimmedReads",
+        "AlignedReads", "BelowMapqReads", "FilteredOutReads",
     ):
         if col not in hdr:
             fail(f"qc_final_cs.txt missing column: {col}")
@@ -315,12 +317,88 @@ def assert_size_composition(outdir: str, srna_enabled: bool, top_enabled: bool) 
     ok(f"{', '.join(sorted(want))} counts match the fixture for all {len(rows)} clusters")
 
 
+# aln_summary.awk against tests/data/unit_fixtures/aln_summary.sam, hand-counted:
+#   14 records: 3 unmapped, 1 secondary, 1 supplementary, so 9 with a primary alignment
+#   of those 9: 2 below MAPQ 30, 3 failing the rest (NM 5 > 2, rlen 10 < 15, no NM tag),
+#   4 passing (including one 20M5D5M, whose reference length is 30 rather than 25)
+ALN_SUMMARY_EXPECTED = {
+    "ReadsSeen": 12,
+    "Records": 14,
+    "Unmapped": 3,
+    "Secondary": 1,
+    "Supplementary": 1,
+    "PrimaryMapped": 9,
+    "BelowMapq": 2,
+    "FailedOtherFilters": 3,
+    "Passed": 4,
+    "UnmappedSampled": 2,
+}
+ALN_SUMMARY_MAPQ = {0: 1, 10: 1, 40: 7}
+
+
+def assert_aln_summary(outdir: str) -> None:
+    import gzip
+
+    summary_path = os.path.join(outdir, "aln.raw.txt")
+    passthrough   = os.path.join(outdir, "passthrough.sam")
+    unmapped_fq   = os.path.join(outdir, "unmapped.sample.fastq.gz")
+    for p in (summary_path, passthrough, unmapped_fq):
+        if not os.path.exists(p):
+            fail(f"Missing output: {p}")
+
+    # The awk sits in the alignment pipe, so anything it changes about the stream would
+    # change the BAM. This is the assertion that matters most.
+    with open(os.path.join(FIXTURES, "aln_summary.sam"), "rb") as fh:
+        want_stream = fh.read()
+    with open(passthrough, "rb") as fh:
+        got_stream = fh.read()
+    if got_stream != want_stream:
+        fail("the SAM that came out of aln_summary.awk is not the SAM that went in")
+    ok("pass-through stream is byte-identical to the input")
+
+    counts, mapq_hist = {}, {}
+    with open(summary_path) as fh:
+        for line in fh:
+            parts = line.rstrip("\n").split("\t")
+            if parts[0] == "MAPQ":
+                mapq_hist[int(parts[1])] = int(parts[2])
+            elif len(parts) == 2:
+                counts[parts[0]] = parts[1]
+    wrong = {k: (v, counts.get(k)) for k, v in ALN_SUMMARY_EXPECTED.items()
+             if counts.get(k) != str(v)}
+    if wrong:
+        fail(f"aln.raw.txt counts wrong (expected, got): {wrong}")
+    ok(f"all {len(ALN_SUMMARY_EXPECTED)} counts match the hand-counted fixture")
+
+    # The three columns gather_stats.sh scrapes have to partition the reads, or the QC
+    # table would show a loss that does not add up.
+    if int(counts["PrimaryMapped"]) != (int(counts["BelowMapq"])
+                                        + int(counts["FailedOtherFilters"])
+                                        + int(counts["Passed"])):
+        fail("PrimaryMapped != BelowMapq + FailedOtherFilters + Passed")
+    if int(counts["ReadsSeen"]) != int(counts["Unmapped"]) + int(counts["PrimaryMapped"]):
+        fail("ReadsSeen != Unmapped + PrimaryMapped")
+    ok("counts partition the reads")
+
+    if mapq_hist != ALN_SUMMARY_MAPQ:
+        fail(f"MAPQ histogram is {mapq_hist}, expected {ALN_SUMMARY_MAPQ}")
+    ok("MAPQ histogram matches")
+
+    with gzip.open(unmapped_fq, "rt") as fh:
+        fq_lines = [l for l in fh if l.strip()]
+    if len(fq_lines) != 4 * ALN_SUMMARY_EXPECTED["UnmappedSampled"]:
+        fail(f"unmapped sample has {len(fq_lines)} lines, expected "
+             f"{4 * ALN_SUMMARY_EXPECTED['UnmappedSampled']}")
+    ok(f"unmapped sample holds {ALN_SUMMARY_EXPECTED['UnmappedSampled']} reads")
+
+
 RULES = {
     "normalize":          assert_normalize,
     "collect_consensus":  assert_collect_consensus,
     "qc_initial":         assert_qc_initial,
     "qc_final":           assert_qc_final,
     "size_composition":   assert_size_composition,
+    "aln_summary":        assert_aln_summary,
 }
 
 
@@ -352,6 +430,8 @@ if __name__ == "__main__":
         fn(args.outdir, args.srna_enabled, args.top_enabled)
     elif args.rule == "collect_consensus":
         fn(args.outdir, args.expect_clusters)
+    elif args.rule == "aln_summary":
+        fn(args.outdir)
     else:
         fn(args.outdir, args.expect_status, args.expect_reason)
 
