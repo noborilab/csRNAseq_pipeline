@@ -120,9 +120,11 @@ Maximum CDF difference: -10000000000
 Using the default input threshold (1)
 ```
 
-and `Fraction Promoter-Distal TSS clusters: 100.00%` with
-`Fraction of stable transcript TSS clusters: 0.00%` in every `tss.txt`, which are
-placeholders rather than results.
+and, in the per-library `tss/<sample>.stats.txt`, `Fraction Promoter-Distal TSS
+clusters: 100.00%` with `Fraction of stable transcript TSS clusters: 0.00%`, which are
+placeholders rather than results. The pipeline now rewrites both to `na` when HOMER had
+nothing to compute them from, so the file no longer reports a placeholder as a
+measurement; see the note under Output Files.
 
 With a GTF, the same library reports non-empty sets and a threshold chosen from the data.
 On the synthetic test genome:
@@ -345,6 +347,7 @@ All outputs land in `files / output_dir` (default: `results/`):
 | `qc/replicate_correlation.txt` | Pairwise Spearman and Pearson correlations between csRNA replicates of the same `sample_name`, for both the initial TSS set (Stage=Initial) and the filtered set (Stage=Final). Empty if no `sample_name` has ≥ 2 replicates. |
 | `qc/stats_initial_cs.txt` | Raw alignment and tag-count statistics for csRNA libraries (TotalReads, OrganelleReads, PosReads, NegReads). |
 | `qc/stats_initial_in.txt` | Raw alignment and tag-count statistics for input libraries. |
+| `tss/{sample}.stats.txt` | HOMER's own per-library report from TSS calling: cluster counts, the enrichment threshold it chose (`log2 fold vs. input`), and the true/false-positive set sizes it chose it from. Post-processed by the pipeline: the promoter-distal and stable-transcript fractions are rewritten to `na` when HOMER had no annotation and no RNA-seq to compute them from, since it otherwise reports its placeholders (100.00% and 0.00%) as though they were measurements. Anything parsing this file should expect `na` in those two positions. |
 | `qc/{sample}.trimming.txt` | bfqutils trimming summary. |
 | `qc/{sample}.aln.txt` | samtools flagstat alignment summary. |
 | `qc/{sample}.aligner.log` | Aligner stderr (bwa/STAR/bowtie2/hisat2). |

@@ -13,6 +13,7 @@ Arguments:
 """
 
 import csv
+import glob
 import os
 import sys
 import argparse
@@ -102,7 +103,29 @@ def assert_golden_qc(outdir: str) -> None:
                  + "\n    ".join(drift[:10]))
         ok(f"{name} matches the golden copy ({len(exp)} rows, {len(exp[0])} columns)")
 
-def main(outdir: str, filter_pass: bool, skip_golden: bool = False) -> None:
+def assert_stats_placeholders(outdir: str) -> None:
+    """HOMER's not-computed fractions must read "na", not a number.
+
+    Only valid for a run with no annotation and no -rna: with a GTF the
+    promoter-distal fraction is a real measurement and must survive untouched, which
+    check_annotation_wiring.py asserts instead.
+    """
+    stats = sorted(glob.glob(os.path.join(outdir, "tss", "*.stats.txt")))
+    if not stats:
+        fail(f"no *.stats.txt under {outdir}/tss")
+    for path in stats:
+        text = open(path).read()
+        for label in ("Fraction of stable transcript TSS clusters",
+                      "Fraction Promoter-Distal TSS clusters"):
+            if f"{label}: na" not in text:
+                got = next((l for l in text.splitlines() if l.startswith(label)), "<absent>")
+                fail(f"{os.path.basename(path)}: expected {label!r} to read na with no "
+                     f"annotation and no -rna, got {got!r}")
+    ok(f"placeholder fractions read na in all {len(stats)} stats files")
+
+
+def main(outdir: str, filter_pass: bool, skip_golden: bool = False,
+         no_annotation: bool = False) -> None:
     print(f"Checking outputs in: {outdir}")
 
     # Expected csRNA samples
@@ -227,6 +250,9 @@ def main(outdir: str, filter_pass: bool, skip_golden: bool = False) -> None:
     if not filter_pass and not skip_golden:
         assert_golden_qc(outdir)
 
+    if no_annotation:
+        assert_stats_placeholders(outdir)
+
     print("\nAll assertions passed.")
 
 
@@ -234,9 +260,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("outdir")
     parser.add_argument("--filter-pass", action="store_true")
+    parser.add_argument("--no-annotation", action="store_true",
+                        help="Assert that HOMER's promoter-distal and stable-transcript "
+                             "fractions read na. Only for runs with no GTF and no -rna, "
+                             "where both are placeholders rather than measurements.")
     parser.add_argument("--skip-golden", action="store_true",
                         help="Skip the golden QC comparison. Used by the per-aligner runs, "
                              "where a different aligner may legitimately shift values and a "
                              "golden mismatch would be misread as a pipeline regression.")
     args = parser.parse_args()
-    main(args.outdir, args.filter_pass, args.skip_golden)
+    main(args.outdir, args.filter_pass, args.skip_golden, args.no_annotation)

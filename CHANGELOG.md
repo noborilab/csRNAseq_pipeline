@@ -22,6 +22,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `collect_consensus_tss` consumes the initial `Status` and nothing consumes the final
   one.
 
+### Changed
+- `tss/<sample>.stats.txt` is now post-processed by `find_tss_initial`, and is a declared
+  output of that rule rather than an untracked side effect. HOMER writes
+  `Fraction of stable transcript TSS clusters: 0.00%` and, with no annotation,
+  `Fraction Promoter-Distal TSS clusters: 100.00%` whether or not the input those need
+  was supplied, so both read as measurements; each is rewritten to `na` when HOMER's own
+  report shows it had nothing to compute it from (an empty true-positive set on the
+  relevant side). A real measurement is never overwritten, and anything parsing that file
+  should expect `na` in those two positions.
+- `collect_consensus_tss.R` sends its warnings to stderr rather than stdout: the notice
+  that a library failed QC and still contributes to the union, and the one about clusters
+  wider than their chromosome. On stdout they landed among the progress narration in the
+  Snakemake log and were easy to miss in a long run.
+
 ### Fixed
 - Editing `qc/min_cs_frip` or `qc/min_pct_nuclear` and rerunning was a silent no-op. Both
   reached the QC scripts through `snakemake@config`, which no rerun trigger can see, so

@@ -308,7 +308,7 @@ run_e2e() {
         -s workflow/Snakefile \
         --configfile "$cfg" \
         2>&1
-    python tests/e2e/assertions.py "$tmp"
+    python tests/e2e/assertions.py "$tmp" --no-annotation
 
     echo ""
     echo "--- e2e: CPM filter (min_cpm=10000, min_samples=3) ---"

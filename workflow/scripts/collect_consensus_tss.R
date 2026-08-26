@@ -23,8 +23,8 @@ failed <- intersect(failed, input$id)
 exclude_failed <- isTRUE(snakemake@params[["exclude_failed"]])
 if (length(failed)) {
   if (exclude_failed) {
-    cat("Excluding ", length(failed), " csRNA librar", if (length(failed) == 1) "y" else "ies",
-        " that failed QC from the consensus: ", paste(failed, collapse = ", "), "\n", sep = "")
+    message("Excluding ", length(failed), " csRNA librar", if (length(failed) == 1) "y" else "ies",
+            " that failed QC from the consensus: ", paste(failed, collapse = ", "))
     input <- input[!input$id %in% failed, ]
     if (!nrow(input)) {
       stop("every csRNA library failed QC, so the consensus set would be empty. ",
@@ -32,11 +32,11 @@ if (length(failed)) {
            "filtering.exclude_failed_from_consensus to false.")
     }
   } else {
-    cat("WARNING: ", length(failed), " csRNA librar", if (length(failed) == 1) "y" else "ies",
-        " failed QC and still contribute to the consensus union: ",
-        paste(failed, collapse = ", "),
-        "\n         Their spurious clusters enter the shared TSS set. Set ",
-        "filtering.exclude_failed_from_consensus to true to drop them.\n", sep = "")
+    message("WARNING: ", length(failed), " csRNA librar", if (length(failed) == 1) "y" else "ies",
+            " failed QC and still contribute to the consensus union: ",
+            paste(failed, collapse = ", "),
+            "\n         Their spurious clusters enter the shared TSS set. Set ",
+            "filtering.exclude_failed_from_consensus to true to drop them.")
   }
 }
 
@@ -103,7 +103,7 @@ nudge_into_chrom <- function(x) {
     x[off != 0 & ok] <- shift(x[off != 0 & ok], off[off != 0 & ok])
   }
   if (any(!ok)) {
-    cat('WARNING: ', sum(!ok), ' cluster(s) are wider than their chromosome and left as they are\n', sep = '')
+    message('WARNING: ', sum(!ok), ' cluster(s) are wider than their chromosome and left as they are')
   }
   x
 }

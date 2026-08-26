@@ -56,6 +56,22 @@ def main(outdir):
              "annotation-based threshold selection did not run")
     ok("HOMER chose the input enrichment threshold from the data, not the fallback")
 
+    # With an annotation the promoter-distal fraction is a real measurement, so the
+    # placeholder rewrite in find_tss_initial must leave it alone. The stable-transcript
+    # fraction has no input either way, since 0.9.0 dropped the -rna arm.
+    distal = next((l for l in text.splitlines()
+                   if l.startswith("Fraction Promoter-Distal TSS clusters:")), "")
+    if not distal:
+        fail("no promoter-distal line in the stats file")
+    if distal.endswith(": na"):
+        fail(f"promoter-distal was rewritten to na despite the annotation: {distal!r}")
+    ok(f"promoter-distal survived the placeholder rewrite ({distal.split(': ')[1]})")
+    if "Fraction of stable transcript TSS clusters: na" not in text:
+        got = next((l for l in text.splitlines()
+                    if l.startswith("Fraction of stable transcript")), "<absent>")
+        fail(f"stable-transcript fraction should read na with no -rna, got {got!r}")
+    ok("stable-transcript fraction reads na")
+
     if "cmd = " not in text:
         fail("no cmd line in the stats file")
     cmd = next(l for l in text.splitlines() if l.startswith("cmd = "))

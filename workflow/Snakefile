@@ -561,6 +561,10 @@ rule find_tss_initial:
     output:
         tss=OUTPUT_DIR + "/tss/{sample}.tss.txt",
         bed=OUTPUT_DIR + "/bed/{sample}.tss.bed",
+        # Declared rather than left as an untracked side effect: the QC step reads the
+        # enrichment threshold HOMER chose out of this file, and the failure branch below
+        # must not be able to leave a stale one behind.
+        stats=OUTPUT_DIR + "/tss/{sample}.stats.txt",
     log:
         OUTPUT_DIR + "/qc/{sample}.find_tss.log",
     benchmark:
@@ -600,6 +604,16 @@ rule find_tss_initial:
                            {params.prefix}.$(echo $suffix | sed 's/{params.called}/tss/') || true
                 done
             fi
+            if [[ -f {output.stats} ]]; then
+                # HOMER reports the promoter-distal and stable-transcript fractions
+                # whether or not the annotation and RNA-seq they need were supplied, so
+                # the placeholders read as measurements. Rewrite those to "na", in the
+                # rule rather than in HOMER so the upstream tool stays untouched. Anything
+                # parsing stats.txt should know it is post-processed.
+                awk -f {workflow.basedir}/scripts/fix_stats_placeholders.awk \
+                    {output.stats} > {output.stats}.tmp \
+                    && mv {output.stats}.tmp {output.stats}
+            fi
             if [[ -f {output.tss} ]]; then
                 pos2bed.pl -o {output.bed} {output.tss} 2>> {log}
             else
@@ -607,7 +621,7 @@ rule find_tss_initial:
                 # an empty BED silently drops this library from the consensus union, and
                 # the only other symptom is a confusing bedtools error further downstream.
                 echo "WARNING: {params.prog} produced no TSSs for {wildcards.sample}; writing an empty TSS set. This library will not contribute to the consensus. See {log}" | tee -a {log} >&2
-                touch {output.tss} {output.bed}
+                touch {output.tss} {output.bed} {output.stats}
             fi
         """
 
