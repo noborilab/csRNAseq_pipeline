@@ -181,12 +181,15 @@ if (!is.null(mirna)) {
 
 # The enrichment threshold HOMER chose for this library, out of its own stats file. With
 # an annotation it picks the threshold from the data per library and there is no flag to
-# floor it, so reading it back is the only way to gate on it. The line is always present
-# when -i was given, which this pipeline always does: with nothing to derive a threshold
-# from, HOMER falls back to -defaultLog2Fold and writes that value here, so the number is
-# the threshold that was actually in force either way. NA when the file is missing or
-# truncated, which means TSS calling for that library did not finish, and counts as a
-# failure below rather than as a pass.
+# floor it, so reading it back is the only way to gate on it. The number is the threshold
+# that was in force either way: with nothing to derive one from, HOMER falls back to
+# -defaultLog2Fold and writes that value on the same line.
+#
+# NA when the line is absent, which happens for real. A library with no valid clusters
+# takes findcsRNATSS through a division by zero on its way to the promoter-distal
+# fraction, so the report stops before the threshold is ever written; the input libraries
+# in the test panel do exactly this. NA counts as a failure below rather than as a pass,
+# since a library that called nothing has not earned an Ok.
 read_log2_threshold <- function(sample, dir) {
     path <- file.path(dir, paste0(sample, ".stats.txt"))
     if (!file.exists(path)) return(NA_real_)

@@ -113,15 +113,25 @@ def assert_stats_placeholders(outdir: str) -> None:
     stats = sorted(glob.glob(os.path.join(outdir, "tss", "*.stats.txt")))
     if not stats:
         fail(f"no *.stats.txt under {outdir}/tss")
+    checked = 0
     for path in stats:
         text = open(path).read()
         for label in ("Fraction of stable transcript TSS clusters",
                       "Fraction Promoter-Distal TSS clusters"):
-            if f"{label}: na" not in text:
-                got = next((l for l in text.splitlines() if l.startswith(label)), "<absent>")
+            line = next((l for l in text.splitlines() if l.startswith(label)), None)
+            # A library with no valid clusters takes findcsRNATSS through a division by
+            # zero here, so its report stops before either fraction is written. Nothing
+            # to rewrite, and nothing to assert.
+            if line is None:
+                continue
+            if not line.endswith(": na"):
                 fail(f"{os.path.basename(path)}: expected {label!r} to read na with no "
-                     f"annotation and no -rna, got {got!r}")
-    ok(f"placeholder fractions read na in all {len(stats)} stats files")
+                     f"annotation and no -rna, got {line!r}")
+            checked += 1
+    if not checked:
+        fail("no stats file carried either fraction line, so the placeholder rewrite was "
+             "never exercised")
+    ok(f"placeholder fractions read na wherever HOMER wrote them ({checked} lines)")
 
 
 def read_aln_summary(path: str) -> dict:
@@ -193,6 +203,7 @@ def assert_log2_threshold(outdir: str, cs_samples, in_samples) -> None:
     it holds whether HOMER derived the threshold from an annotation or fell back to
     -defaultLog2Fold.
     """
+    matched = []
     for fname, ids in (("qc/qc_initial_cs.txt", cs_samples),
                        ("qc/qc_initial_in.txt", in_samples)):
         with open(os.path.join(outdir, fname)) as fh:
@@ -202,13 +213,22 @@ def assert_log2_threshold(outdir: str, cs_samples, in_samples) -> None:
                 fail(f"{fname} has no Log2FoldThreshold column")
             stats = os.path.join(outdir, "tss", f"{s}.stats.txt")
             line = next((l for l in open(stats) if "log2 fold vs. input:" in l), None)
+            have = rows[s]["Log2FoldThreshold"]
+            # A library with no valid clusters dies before the threshold is written, so
+            # the column has nothing to report and must say so rather than guess.
             if line is None:
-                fail(f"{stats} has no 'log2 fold vs. input' line")
+                if have != "NA":
+                    fail(f"{fname}: {s} reports Log2FoldThreshold {have}, but {stats} "
+                         "never wrote a threshold")
+                continue
             want = float(line.split(":")[1])
-            have = float(rows[s]["Log2FoldThreshold"])
-            if abs(want - have) > 1e-9:
+            if abs(want - float(have)) > 1e-9:
                 fail(f"{fname}: {s} Log2FoldThreshold is {have}, but {stats} says {want}")
-    ok("Log2FoldThreshold matches the threshold HOMER reported for every library")
+            matched.append(s)
+    if not matched:
+        fail("no library reported a threshold, so the parse was never exercised")
+    ok(f"Log2FoldThreshold matches HOMER's own report ({len(matched)} libraries), and is "
+       "NA where HOMER wrote none")
 
 
 def main(outdir: str, filter_pass: bool, skip_golden: bool = False,

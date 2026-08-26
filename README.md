@@ -421,7 +421,7 @@ The `qc_initial_cs.txt` / `qc_initial_in.txt` tables contain the columns below. 
 
 | Column | Description |
 |--------|-------------|
-| `Log2FoldThreshold` | The enrichment threshold this library's TSS calling actually used, read back from `tss/<sample>.stats.txt`. Chosen by HOMER from the data when an annotation is available, otherwise `program / homer / tss / default_log2_fold`. Gated by `qc / min_log2_fold`. `NA` means TSS calling for the library did not finish, which counts as a failure. |
+| `Log2FoldThreshold` | The enrichment threshold this library's TSS calling actually used, read back from `tss/<sample>.stats.txt`. Chosen by HOMER from the data when an annotation is available, otherwise `program / homer / tss / default_log2_fold`. Gated by `qc / min_log2_fold`. `NA` when HOMER wrote no threshold at all, which is what happens for a library with no valid clusters: it hits a division by zero on the way to the promoter-distal fraction and its report stops early. `NA` counts as a failure, and input libraries commonly show it. |
 | `AlignedReads` | Reads with a primary alignment, counted before filtering. `TrimmedReads` minus this is the reads that never aligned. |
 | `BelowMapqReads` | Aligned reads discarded by `filtering / alignment_mapq`, which in practice means multi-mappers. |
 | `FilteredOutReads` | Aligned reads that cleared MAPQ and were then discarded by `exclude_flags`, `include_flags`, `min_alignment_length` or `max_mismatch`. |
