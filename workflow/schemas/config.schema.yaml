@@ -512,6 +512,25 @@ properties:
           Minimum percentage of aligned reads originating from nuclear
           chromosomes (i.e. not mitochondrial or plastid). Low values
           indicate organellar contamination.
+      min_cs_frip_final:
+        type: ["number", "null"]
+        default: null
+        description: >
+          csFRiP gate for the final QC table, which measures csFRiP against
+          tss.final.bed rather than the initial merged TSS set. The two are
+          different measurements, so one number cannot serve both: every
+          library's csFRiP falls when the consensus set shrinks, and a gate
+          tuned on the initial table therefore flags sound libraries in the
+          final one. Null falls back to min_cs_frip, which is the behaviour
+          before this key existed.
+      min_pct_nuclear_final:
+        type: ["number", "null"]
+        default: null
+        description: >
+          Nuclear-percentage gate for the final QC table. Null falls back to
+          min_pct_nuclear. Nuclear percentage does not depend on the TSS set,
+          so this exists for symmetry with min_cs_frip_final rather than
+          because the two must differ.
 required:
   - program
   - chrom_sizes

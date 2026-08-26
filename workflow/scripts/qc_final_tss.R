@@ -4,6 +4,13 @@ cs_ids        <- strsplit(snakemake@params[["cs_ids"]],        " ", fixed = TRUE
 paired_in_ids <- strsplit(snakemake@params[["paired_in_ids"]], " ", fixed = TRUE)[[1]]
 cs_to_in      <- setNames(paired_in_ids, cs_ids)
 
+# Gates come from params, not snakemake@config, so that editing one is a change Snakemake
+# can see; and they are the final gates (qc/min_cs_frip_final and min_pct_nuclear_final,
+# each falling back to its initial counterpart), resolved in the Snakefile rather than
+# here so the resolved number is what triggers a rerun.
+MIN_CS_FRIP     <- as.numeric(snakemake@params[["min_cs_frip"]])
+MIN_PCT_NUCLEAR <- as.numeric(snakemake@params[["min_pct_nuclear"]])
+
 stats_cs <- read.table(trimws(snakemake@input[["stats_cs"]]), header = TRUE, stringsAsFactors = FALSE)
 stats_in <- read.table(trimws(snakemake@input[["stats_in"]]), header = TRUE, stringsAsFactors = FALSE)
 
@@ -186,11 +193,28 @@ stats_in[["StrandBalance"]] <- with(stats_in, PosReads / (PosReads + NegReads))
 stats_cs[["PctNuclear"]] <- 100 * (stats_cs[["NuclearReads"]] / stats_cs[["TotalReads"]])
 stats_in[["PctNuclear"]] <- 100 * (stats_in[["NuclearReads"]] / stats_in[["TotalReads"]])
 
-stats_cs[["Status"]] <- ifelse(
-    stats_cs[["csFRiP"]] > snakemake@config[["qc"]][["min_cs_frip"]] &
-    stats_cs[["PctNuclear"]] > snakemake@config[["qc"]][["min_pct_nuclear"]],
-    "Ok", "FAIL"
-)
+# Same gate-to-Status logic as qc_initial_tss.R, against the final numbers. StatusReason
+# names the gates that tripped; an NA gate counts as a failure, since a gate that cannot
+# be evaluated is not evidence that the library is sound.
+qc_status <- function(gates) {
+    fails <- do.call(cbind, lapply(gates, function(g) is.na(g) | !g))
+    colnames(fails) <- names(gates)
+    data.frame(
+        Status = ifelse(rowSums(fails) > 0, "FAIL", "Ok"),
+        StatusReason = apply(fails, 1, function(r) paste(names(gates)[r], collapse = ",")),
+        stringsAsFactors = FALSE
+    )
+}
+
+status <- qc_status(list(
+    csFRiP     = stats_cs[["csFRiP"]]     > MIN_CS_FRIP,
+    PctNuclear = stats_cs[["PctNuclear"]] > MIN_PCT_NUCLEAR
+))
+stats_cs[["Status"]] <- status[["Status"]]
+stats_cs[["StatusReason"]] <- status[["StatusReason"]]
+# Advisory, and labelled as such: collect_consensus_tss reads the initial Status, so a
+# FAIL here has already had no effect on the TSS set this table describes.
+stats_cs[["StatusBasis"]] <- "final-advisory"
 
 readr::write_tsv(stats_cs, snakemake@output[["qc_cs"]])
 readr::write_tsv(stats_in, snakemake@output[["qc_in"]])
@@ -198,5 +222,5 @@ readr::write_tsv(stats_in, snakemake@output[["qc_in"]])
 cat("Final TSS set: ", n_final, " of ", n_consensus,
     " consensus TSSs retained (", n_consensus - n_final, " filtered)\n", sep = "")
 cat("Printing summary stats:\n")
-print(cbind(stats_cs[, c("Sample", "Status", "PctNuclear", "csFRiP")],
+print(cbind(stats_cs[, c("Sample", "Status", "StatusReason", "PctNuclear", "csFRiP")],
             csFRiP_in = stats_in_cs[["csFRiP"]]))

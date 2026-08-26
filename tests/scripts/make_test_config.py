@@ -33,6 +33,12 @@ def main():
     p.add_argument("--top-sizes-n", type=int, default=None)
     p.add_argument("--exclude-failed", action="store_true",
                    help="Set filtering.exclude_failed_from_consensus")
+    p.add_argument("--min-cs-frip", type=float, default=None,
+                   help="Set qc/min_cs_frip (the initial-table csFRiP gate)")
+    p.add_argument("--min-cs-frip-final", type=float, default=None,
+                   help="Set qc/min_cs_frip_final (unset means fall back to min_cs_frip)")
+    p.add_argument("--min-pct-nuclear-final", type=float, default=None,
+                   help="Set qc/min_pct_nuclear_final")
     p.add_argument("--gtf", default=None,
                    help="Set program/homer/tss/gtf (repo-relative path)")
     p.add_argument("--alignment-program",
@@ -79,6 +85,12 @@ def main():
         cfg["filtering"]["tss_top_sizes_n"] = args.top_sizes_n
     if args.exclude_failed:
         cfg["filtering"]["exclude_failed_from_consensus"] = True
+    if args.min_cs_frip is not None:
+        cfg["qc"]["min_cs_frip"] = args.min_cs_frip
+    if args.min_cs_frip_final is not None:
+        cfg["qc"]["min_cs_frip_final"] = args.min_cs_frip_final
+    if args.min_pct_nuclear_final is not None:
+        cfg["qc"]["min_pct_nuclear_final"] = args.min_pct_nuclear_final
     if args.gtf is not None:
         cfg["program"]["homer"]["tss"]["gtf"] = abs_fixture(args.gtf)
     if args.alignment_program is not None:

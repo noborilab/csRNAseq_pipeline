@@ -230,6 +230,34 @@ run_unit_smk() {
         python tests/e2e/unit_assertions.py collect_consensus "$tmp9" --expect-clusters 6 || rc=1
     fi
 
+    if [[ "$rule_name" == "qc_initial" ]]; then
+        # tests/data/config.yaml gates at 0.0, so every fixture library passes and no
+        # StatusReason should be populated.
+        python tests/e2e/unit_assertions.py qc_initial "$tmp" --expect-status Ok || rc=1
+    fi
+
+    if [[ "$rule_name" == "qc_final" ]]; then
+        # The default run leaves min_cs_frip_final unset, which is the path every existing
+        # config takes: the final gate falls back to the initial one and nothing changes.
+        python tests/e2e/unit_assertions.py qc_final "$tmp" --expect-status Ok || rc=1
+
+        # Then set the final gate away from the initial one. The two tables measure csFRiP
+        # against different TSS sets, so disagreeing is the point rather than a fault.
+        local tmp10 cfg10
+        tmp10=$(mktemp -d)
+        cfg10=$(make_cfg "$tmp10" "$tmp10" "$tmp10/index/genome.fa" --min-cs-frip-final 0.99)
+        trap "rm -rf $tmp10 $cfg10" EXIT
+        echo ""
+        echo "--- qc_final (min_cs_frip_final 0.99 against an initial gate of 0.0) ---"
+        snakemake -s "$smk" \
+            --configfile "$cfg10" \
+            --config "test_outdir=$tmp10" \
+            --cores 1 \
+            --quiet 2>&1 || rc=1
+        python tests/e2e/unit_assertions.py qc_final "$tmp10" \
+            --expect-status FAIL --expect-reason csFRiP || rc=1
+    fi
+
     if [[ "$rule_name" == "size_composition" ]]; then
         local tmp5 cfg5
         tmp5=$(mktemp -d)

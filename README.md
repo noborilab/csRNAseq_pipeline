@@ -193,6 +193,27 @@ filtering:
 `qc / min_pct_nuclear`. Consider `tss_min_reps: 2` alongside it, so that no single library
 can inject a cluster on its own.
 
+### `qc / min_cs_frip_final` and `qc / min_pct_nuclear_final`
+
+The initial and final QC tables both report `csFRiP`, but they measure it against
+different regions: the initial merged TSS set in one, `tss.final.bed` in the other. One
+number therefore cannot gate both. Every library's `csFRiP` falls when the consensus set
+shrinks (0.030 to 0.058 on one 22-library Arabidopsis panel, purely from the set getting
+smaller), so a gate tuned so that the initial table flags exactly the four collapsed
+libraries went on to flag 8 of 22 in the final table, four of them sound.
+
+Both keys are unset by default, in which case they fall back to `min_cs_frip` and
+`min_pct_nuclear`, so an existing config behaves exactly as it did before they existed.
+
+```yaml
+qc:
+  min_cs_frip: 0.80         # gates the initial table, and the consensus through it
+  min_cs_frip_final: 0.70   # gates the final table only
+```
+
+Only the initial `Status` feeds `collect_consensus_tss`; see the note at the end of the QC
+section.
+
 ### `filtering / tss_min_cpm` and `filtering / tss_min_samples`
 
 Signal-based filter applied after quantification and before TMM normalization. A TSS is kept in `tss.final.bed` only if its CPM (counts per million library-size reads, without TMM) is ≥ `tss_min_cpm` in at least `tss_min_samples` csRNA samples. Defaults are `tss_min_cpm: 0` and `tss_min_samples: 1`, which keep all TSSs. Example to require ≥ 1 CPM in ≥ 2 samples:
@@ -291,14 +312,14 @@ changing it re-runs the `tss_size_composition` rule.
 | `gather_stats` | Extract total reads, organellar reads, and tag frequencies from HOMER tagInfo files. |
 | `merge_initial_tss` | Strand-aware merge of all per-sample TSS BEDs. Chromosomes not in `chrom_sizes` are excluded. |
 | `quantify_initial_{cs,in}_tss` | HOMER `annotatePeaks.pl` quantification of merged TSS sets in all libraries. |
-| `qc_initial_tss` | Calculate FRiP, nuclear read %, csRNA enrichment, miRNA depletion, and phosphorylation efficiency. Samples with FRiP < `min_cs_frip` or nuclear % < `min_pct_nuclear` are flagged as FAIL. |
+| `qc_initial_tss` | Calculate FRiP, nuclear read %, csRNA enrichment, miRNA depletion, and phosphorylation efficiency. Samples with FRiP < `min_cs_frip` or nuclear % < `min_pct_nuclear` are flagged as FAIL, with `StatusReason` naming the gates that tripped. The gates reach the script as rule params, so editing one and rerunning with `--rerun-triggers params` (Snakemake's default set includes `params`) recomputes the table. |
 | `collect_consensus_tss` | Build the consensus TSS set (`tss.consensus.bed`) from csRNA samples, requiring detection in at least `tss_min_reps` replicates. TSSs narrower than 150 bp are padded; overlapping TSSs are split. TSSs overlapping miRNA / pre-tRNA loci (if `qc / mirnas` and `qc / trnas` are set) are removed. |
 | `quantify_final_tss` | HOMER quantification of the consensus TSSs in all csRNA libraries. |
 | `tss_size_composition_library` | Per-cluster read counts, small-RNA-sized read counts and top-1..N length concentration for one csRNA library, from its tag directory. One job per library, so Snakemake runs them in parallel. Reads nothing when both size filters are off. |
 | `tss_size_composition` | Joins the per-library tables into `tss.consensus.sizes.txt`. |
 | `normalize_tss_quantification` | CPM filter (drop TSSs below `filtering / tss_min_cpm` in fewer than `filtering / tss_min_samples` csRNA samples), then the two read-size composition filters (`filtering / tss_srna_sizes` and `filtering / tss_max_top_sizes_fraction`), then TMM normalization (edgeR `TMMwsp`) of the retained counts. Writes the filtered set as `tss.final.bed`. All of these default to no-ops, keeping every TSS. |
 | `quantify_final_in_tss` | HOMER quantification of the filtered `tss.final.bed` in all input libraries. Used by the final QC step. |
-| `qc_final_tss` | Compute FRiP, csEnrichment, replicate correlations, and TSS detection rate on the filtered `tss.final.bed`. Writes `qc/qc_final_cs.txt` and `qc/qc_final_in.txt`. |
+| `qc_final_tss` | Compute FRiP, csEnrichment, replicate correlations, and TSS detection rate on the filtered `tss.final.bed`. Gated by `qc / min_cs_frip_final` and `qc / min_pct_nuclear_final`, each falling back to its initial counterpart. Writes `qc_final_cs.txt` and `qc_final_in.txt`. |
 | `generate_normalized_bw` | Multiply raw bedGraphs by RPM scale factors and export as bigWig. Small RNA regions can optionally be masked. |
 | `run_info` | Write `run_info.txt`: pipeline version and git commit, host, resolved config, sample-table checksum, and the version of every tool the run used. |
 
@@ -319,8 +340,8 @@ All outputs land in `files / output_dir` (default: `results/`):
 | `bw/{sample}.rpm.neg.bw` | Reverse-strand RPM-normalized bigWig (scores are negative). |
 | `qc/qc_initial_cs.txt` | Per-sample QC metrics for csRNA libraries computed on the merged initial TSS set (FRiP, enrichment, etc.). |
 | `qc/qc_initial_in.txt` | Per-sample QC metrics for input libraries computed on the merged initial TSS set. |
-| `qc/qc_final_cs.txt` | Per-sample QC metrics for csRNA libraries re-derived from the filtered `tss.final.bed`. Same columns as `qc_initial_cs.txt` plus `FinalTSSDetected`, `NConsensusTSS`, `NFinalTSS` and `NFilteredTSS`. All metrics are re-computed from raw counts, not copied from the initial QC, so `csRiP` / `csFRiP` / `csEnrichment` here refer to the **final** TSS set while the same names in `qc_initial_cs.txt` refer to the initial merged set. Do not compare the two files column-by-column. |
-| `qc/qc_final_in.txt` | Per-sample QC metrics for input libraries, augmented with `Final*` columns. |
+| `qc_final_cs.txt` | Per-sample QC metrics for csRNA libraries re-derived from the filtered `tss.final.bed`. Same columns as `qc_initial_cs.txt` plus `FinalTSSDetected`, `NConsensusTSS`, `NFinalTSS` and `NFilteredTSS`. All metrics are re-computed from raw counts, not copied from the initial QC, so `csRiP` / `csFRiP` / `csEnrichment` here refer to the **final** TSS set while the same names in `qc_initial_cs.txt` refer to the initial merged set. Do not compare the two files column-by-column. |
+| `qc_final_in.txt` | Per-sample QC metrics for input libraries, augmented with `Final*` columns. |
 | `qc/replicate_correlation.txt` | Pairwise Spearman and Pearson correlations between csRNA replicates of the same `sample_name`, for both the initial TSS set (Stage=Initial) and the filtered set (Stage=Final). Empty if no `sample_name` has ≥ 2 replicates. |
 | `qc/stats_initial_cs.txt` | Raw alignment and tag-count statistics for csRNA libraries (TotalReads, OrganelleReads, PosReads, NegReads). |
 | `qc/stats_initial_in.txt` | Raw alignment and tag-count statistics for input libraries. |
@@ -351,6 +372,9 @@ The `qc_initial_cs.txt` / `qc_initial_in.txt` tables contain the columns below. 
 | `NFilteredTSS` | (`qc_final_*` only) Number of TSSs dropped by the CPM filter. |
 | `MinReplCorrSpearman` | Minimum Spearman correlation between this sample's TSS counts and any other csRNA replicate of the same `sample_name`. `NA` when only one replicate exists. Sharp drops (e.g. < 0.9) flag sample swaps or replicate dropouts. csRNA samples only. |
 | `MinReplCorrPearson` | Same as above but Pearson correlation on log1p-transformed counts. |
+| `Status` | `Ok` or `FAIL`, from the gates listed under `StatusReason`. A gate that cannot be evaluated (an `NA` csFRiP, say) counts as a failure rather than as a pass. csRNA samples only. |
+| `StatusReason` | Comma-separated list of the gates that tripped, empty when `Status` is `Ok`. This is what makes a FAIL actionable without re-deriving every gate by hand. |
+| `StatusBasis` | `initial` in `qc_initial_cs.txt` and `final-advisory` in `qc_final_cs.txt`. `collect_consensus_tss` reads the **initial** `Status` and nothing reads the final one, so a FAIL in the final table has already had no effect on the TSS set that table describes. |
 
 ### Reading these numbers, and what they do not mean
 
@@ -381,4 +405,8 @@ demonstrably changed the libraries. The metrics that did separate consistently w
 `PretRNAPct`, `PhosEfficiency`, alignment survival and the useful-read fraction. Power
 comparisons on those.
 
-| `Status` | `Ok` or `FAIL` based on `min_cs_frip` and `min_pct_nuclear` thresholds. |
+**Only the initial `Status` acts on anything.** `collect_consensus_tss` reads
+`qc_initial_cs.txt`, so that is the table whose gates (`qc / min_cs_frip`,
+`qc / min_pct_nuclear`) can change a run, and `filtering / exclude_failed_from_consensus`
+is what makes them do so. The final table's `Status` is advice, labelled as such in
+`StatusBasis`, and it has its own gates because it measures a different thing.

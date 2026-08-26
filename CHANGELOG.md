@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `qc/min_cs_frip_final` and `qc/min_pct_nuclear_final`, gates for the final QC table.
+  Both tables report `csFRiP`, but they measure it against different regions (the initial
+  merged TSS set against `tss.final.bed`), so one number cannot serve both: every
+  library's final `csFRiP` falls when the consensus shrinks, 0.030 to 0.058 on one
+  22-library panel, so a gate tuned so the initial table flags exactly the four collapsed
+  libraries went on to flag 8 of 22 in the final table, four of them sound. Unset by
+  default, falling back to `min_cs_frip` and `min_pct_nuclear`, so existing configs
+  behave exactly as before.
+- `StatusReason` in both csRNA QC tables, naming the gates that tripped. `Status` on its
+  own said only Ok or FAIL, which is opaque once more than one gate is in play.
+- `StatusBasis` in both csRNA QC tables, `initial` or `final-advisory`, recording that
+  `collect_consensus_tss` consumes the initial `Status` and nothing consumes the final
+  one.
+
+### Fixed
+- Editing `qc/min_cs_frip` or `qc/min_pct_nuclear` and rerunning was a silent no-op. Both
+  reached the QC scripts through `snakemake@config`, which no rerun trigger can see, so
+  the stale `Status` stayed on disk with nothing in the log to say the new gate had been
+  ignored. Both now arrive as rule params, which `--rerun-triggers params` (in
+  Snakemake's default trigger set) acts on. `collect_consensus_tss.R` had the same bug
+  for `filtering/tss_min_reps`, reading the config copy while the rule was already
+  passing it as a param; no `snakemake@config` read is left in any script.
+- A QC gate that cannot be evaluated (an `NA` `csFRiP` from a library with no nuclear
+  reads) previously left `Status` as `NA`, which `collect_consensus_tss` treated as
+  neither Ok nor FAIL. It now counts as a failure, named in `StatusReason`.
+- The README pointed at `qc/qc_final_cs.txt` and `qc/qc_final_in.txt`; both have been at
+  the output root since the output paths were reorganised.
+
 ## [0.9.0] - 2026-08-04
 
 ### Removed

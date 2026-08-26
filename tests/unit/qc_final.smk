@@ -13,6 +13,14 @@ FIXTURES = "tests/data/unit_fixtures"
 TEST_OUTDIR = config.get("test_outdir", "tests/unit/tmp_qc_final")
 
 
+def gate(key, fallback):
+    """The same fallback the Snakefile resolves: a final gate left unset uses the
+    initial one, so an existing config behaves exactly as it did before the final
+    gates existed. An explicit None test, so a gate of 0 is not read as unset."""
+    value = config["qc"].get(key)
+    return fallback if value is None else value
+
+
 rule all:
     input:
         TEST_OUTDIR + "/qc_final_cs.txt",
@@ -65,5 +73,7 @@ rule test_qc_final_tss:
         paired_in_ids="condA_input1 condA_input2 condA_input1",
         mirnas=config.get("qc", {}).get("mirnas") or "",
         trnas=config.get("qc", {}).get("trnas") or "",
+        min_cs_frip=gate("min_cs_frip_final", config["qc"]["min_cs_frip"]),
+        min_pct_nuclear=gate("min_pct_nuclear_final", config["qc"]["min_pct_nuclear"]),
     script:
         "../../workflow/scripts/qc_final_tss.R"

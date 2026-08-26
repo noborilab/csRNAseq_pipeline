@@ -114,6 +114,31 @@ if TSS_GTF:
 TSS_PROGRAM = config["program"]["homer"]["tss"].get("program", "findcsRNATSS.pl")
 
 
+# QC gates are resolved here and handed to the two QC rules as params, never read from
+# snakemake@config inside the scripts. A config value reached that way is invisible to
+# Snakemake: mtime sees no changed file, input sees no changed input, and
+# --rerun-triggers params cannot help because the value is in no params dict, so editing
+# a gate and rerunning silently leaves the old Status on disk.
+def resolve_gate(key, fallback):
+    """Return config["qc"][key], or fallback when it is unset.
+
+    An explicit None test rather than `or`, so a gate deliberately set to 0 is not
+    silently replaced by the fallback.
+    """
+    value = config["qc"].get(key)
+    return fallback if value is None else value
+
+
+MIN_CS_FRIP = config["qc"]["min_cs_frip"]
+MIN_PCT_NUCLEAR = config["qc"]["min_pct_nuclear"]
+# The final QC measures csFRiP against tss.final.bed rather than the initial merged set,
+# so the two tables need their own gates: every library's csFRiP drops when the consensus
+# shrinks, and a gate tuned on the initial table then flags libraries whose only fault is
+# that the set they are measured against got smaller.
+MIN_CS_FRIP_FINAL = resolve_gate("min_cs_frip_final", MIN_CS_FRIP)
+MIN_PCT_NUCLEAR_FINAL = resolve_gate("min_pct_nuclear_final", MIN_PCT_NUCLEAR)
+
+
 def index_sentinel(aln, index):
     """Return the file whose existence indicates the genome index is fully built."""
     if aln in ("bwa-aln", "bwa-mem"):
@@ -799,6 +824,8 @@ rule qc_initial_tss:
     params:
         mirnas=config.get("qc", {}).get("mirnas") or "",
         trnas=config.get("qc", {}).get("trnas") or "",
+        min_cs_frip=MIN_CS_FRIP,
+        min_pct_nuclear=MIN_PCT_NUCLEAR,
         cs_ids=" ".join(list(sampletab["id"][sampletab["sample_type"] == "csrna"])),
         paired_in_ids=" ".join(
             [
@@ -1065,5 +1092,7 @@ rule qc_final_tss:
         ),
         mirnas=config.get("qc", {}).get("mirnas") or "",
         trnas=config.get("qc", {}).get("trnas") or "",
+        min_cs_frip=MIN_CS_FRIP_FINAL,
+        min_pct_nuclear=MIN_PCT_NUCLEAR_FINAL,
     script:
         "scripts/qc_final_tss.R"

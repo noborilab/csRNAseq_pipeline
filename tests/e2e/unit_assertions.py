@@ -8,6 +8,8 @@ Usage:
     rule      One of: normalize, collect_consensus, qc_initial, qc_final
     outdir    Directory where the unit mini-Snakefile wrote its outputs
     --filtered  (normalize only) Expect that the CPM filter removed some TSSs
+    --expect-status   (qc_initial, qc_final) Status every library should have
+    --expect-reason   (qc_initial, qc_final) Gate name every StatusReason should name
 """
 
 import csv
@@ -137,7 +139,48 @@ def assert_collect_consensus(outdir: str, expect_clusters: int = None) -> None:
     ok("No overlapping TSSs on the same strand")
 
 
-def assert_qc_initial(outdir: str) -> None:
+def check_status(path: str, basis: str, expect_status: str = None,
+                 expect_reason: str = None) -> None:
+    """Status, StatusReason and StatusBasis in one of the csRNA QC tables.
+
+    StatusBasis is what says which table a Status came from, which is the difference
+    between a FAIL that changed the run (the initial table, which
+    collect_consensus_tss reads) and one that is only advice (the final table).
+    """
+    with open(path) as fh:
+        rows = list(csv.DictReader(fh, delimiter="\t"))
+    for col in ("Status", "StatusReason", "StatusBasis"):
+        if col not in rows[0]:
+            fail(f"{os.path.basename(path)} missing column: {col}")
+    wrong_basis = [r["Sample"] for r in rows if r["StatusBasis"] != basis]
+    if wrong_basis:
+        fail(f"{os.path.basename(path)}: StatusBasis should be {basis!r} for "
+             f"{wrong_basis}")
+    ok(f"{os.path.basename(path)} has Status, StatusReason and StatusBasis={basis}")
+
+    if expect_status is not None:
+        wrong = [(r["Sample"], r["Status"]) for r in rows if r["Status"] != expect_status]
+        if wrong:
+            fail(f"{os.path.basename(path)}: expected Status {expect_status} for every "
+                 f"library, got {wrong}")
+        ok(f"every library is {expect_status}")
+    if expect_reason is not None:
+        wrong = [(r["Sample"], r["StatusReason"]) for r in rows
+                 if expect_reason not in r["StatusReason"].split(",")]
+        if wrong:
+            fail(f"{os.path.basename(path)}: expected {expect_reason!r} among the failed "
+                 f"gates for every library, got {wrong}")
+        ok(f"every StatusReason names {expect_reason}")
+    elif expect_status == "Ok":
+        noisy = [(r["Sample"], r["StatusReason"]) for r in rows if r["StatusReason"]]
+        if noisy:
+            fail(f"{os.path.basename(path)}: passing libraries should have an empty "
+                 f"StatusReason, got {noisy}")
+        ok("passing libraries have an empty StatusReason")
+
+
+def assert_qc_initial(outdir: str, expect_status: str = None,
+                      expect_reason: str = None) -> None:
     qc_cs_path = os.path.join(outdir, "qc_initial_cs.txt")
     qc_in_path = os.path.join(outdir, "qc_initial_in.txt")
     cor_path   = os.path.join(outdir, "replicate_correlation.txt")
@@ -173,8 +216,11 @@ def assert_qc_initial(outdir: str) -> None:
         fail("condB_csrna1 not found in qc_initial_cs.txt; shared-input pairing may be broken")
     ok("condB_csrna1 present in qc_initial_cs.txt (shared-input pairing works)")
 
+    check_status(qc_cs_path, "initial", expect_status, expect_reason)
 
-def assert_qc_final(outdir: str) -> None:
+
+def assert_qc_final(outdir: str, expect_status: str = None,
+                    expect_reason: str = None) -> None:
     qc_cs_path = os.path.join(outdir, "qc_final_cs.txt")
     qc_in_path = os.path.join(outdir, "qc_final_in.txt")
     cor_path   = os.path.join(outdir, "replicate_correlation.txt")
@@ -220,6 +266,8 @@ def assert_qc_final(outdir: str) -> None:
     if n_in != 2:
         fail(f"qc_final_in.txt has {n_in} rows, expected 2")
     ok(f"qc_final_cs.txt ({n_cs} rows) and qc_final_in.txt ({n_in} rows) correct")
+
+    check_status(qc_cs_path, "final-advisory", expect_status, expect_reason)
 
 
 def assert_size_composition(outdir: str, srna_enabled: bool, top_enabled: bool) -> None:
@@ -290,6 +338,11 @@ if __name__ == "__main__":
                         help="For size_composition: expect top1..topN columns")
     parser.add_argument("--expect-clusters", type=int, default=None,
                         help="For collect_consensus: exact number of consensus TSSs")
+    parser.add_argument("--expect-status", choices=["Ok", "FAIL"], default=None,
+                        help="For qc_initial / qc_final: Status every library should have")
+    parser.add_argument("--expect-reason", default=None,
+                        help="For qc_initial / qc_final: a gate name every StatusReason "
+                             "should list")
     args = parser.parse_args()
 
     fn = RULES[args.rule]
@@ -300,6 +353,6 @@ if __name__ == "__main__":
     elif args.rule == "collect_consensus":
         fn(args.outdir, args.expect_clusters)
     else:
-        fn(args.outdir)
+        fn(args.outdir, args.expect_status, args.expect_reason)
 
     print()

@@ -32,6 +32,9 @@ rule test_qc_initial_tss:
     params:
         mirnas=config.get("qc", {}).get("mirnas") or "",
         trnas=config.get("qc", {}).get("trnas") or "",
+        # Gates as params, exactly as the production rule passes them.
+        min_cs_frip=config["qc"]["min_cs_frip"],
+        min_pct_nuclear=config["qc"]["min_pct_nuclear"],
         # condA_csrna1→condA_input1, condA_csrna2→condA_input2,
         # condB_csrna1→condA_input1 (shared via input_name)
         cs_ids="condA_csrna1 condA_csrna2 condB_csrna1",

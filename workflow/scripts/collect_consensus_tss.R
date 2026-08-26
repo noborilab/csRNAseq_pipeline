@@ -40,7 +40,9 @@ if (length(failed)) {
   }
 }
 
-nreps <- snakemake@config[["filtering"]][["tss_min_reps"]]
+# From params, not snakemake@config: the rule passes min_reps as a param already, and the
+# config copy is the one Snakemake cannot see changing.
+nreps <- as.integer(snakemake@params[["min_reps"]])
 if (nreps > 1) {
   samples <- unique(input$sample_name)
 } else {

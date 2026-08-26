@@ -10,6 +10,12 @@ TSS_CS <- snakemake@input[["tss_cs"]]
 TSS_IN <- snakemake@input[["tss_in"]]
 MIRNAS <- snakemake@params[["mirnas"]]
 TRNAS <- snakemake@params[["trnas"]]
+# The QC gates arrive as params rather than through snakemake@config, so that editing one
+# in the config is a change Snakemake can act on. A config value read directly inside the
+# script is invisible to every rerun trigger, so the old Status would stay on disk with
+# nothing in the log to say the new gate had been ignored.
+MIN_CS_FRIP <- as.numeric(snakemake@params[["min_cs_frip"]])
+MIN_PCT_NUCLEAR <- as.numeric(snakemake@params[["min_pct_nuclear"]])
 OUT_CS <- snakemake@output[["qc_cs"]]
 OUT_IN <- snakemake@output[["qc_in"]]
 OUT_REPLCOR <- snakemake@output[["repl_cor"]]
@@ -171,10 +177,33 @@ if (!is.null(mirna)) {
     stats_in[['miRNAPct']] <- with(stats_in, 100 * (miRNA / (miRNA + csRiP)))
 }
 
-stats_cs[['Status']] <- ifelse(stats_cs[['csFRiP']] > snakemake@config[["qc"]][["min_cs_frip"]] & stats_cs[['PctNuclear']] > snakemake@config[["qc"]][["min_pct_nuclear"]], 'Ok', 'FAIL')
+# Status is a bare Ok/FAIL, which says nothing about which gate tripped. StatusReason
+# names them, so a library that fails is legible without re-deriving every gate by hand.
+# A gate that cannot be evaluated counts as a failure: an NA is not evidence that the
+# library is sound.
+qc_status <- function(gates) {
+    fails <- do.call(cbind, lapply(gates, function(g) is.na(g) | !g))
+    colnames(fails) <- names(gates)
+    data.frame(
+        Status = ifelse(rowSums(fails) > 0, 'FAIL', 'Ok'),
+        StatusReason = apply(fails, 1, function(r) paste(names(gates)[r], collapse = ',')),
+        stringsAsFactors = FALSE
+    )
+}
+
+status <- qc_status(list(
+    csFRiP     = stats_cs[['csFRiP']]     > MIN_CS_FRIP,
+    PctNuclear = stats_cs[['PctNuclear']] > MIN_PCT_NUCLEAR
+))
+stats_cs[['Status']] <- status[['Status']]
+stats_cs[['StatusReason']] <- status[['StatusReason']]
+# Which of the two QC tables this Status came from. collect_consensus_tss consumes the
+# initial one and nothing consumes the final one, so the distinction decides whether a
+# FAIL changed the run or is only advice.
+stats_cs[['StatusBasis']] <- 'initial'
 
 readr::write_tsv(stats_cs, OUT_CS)
 readr::write_tsv(stats_in, OUT_IN)
 
 cat('Printing summary stats:\n')
-print(cbind(stats_cs[, c('Sample', 'Status', 'PctNuclear', 'csFRiP')], csFRiP_in = stats_in_cs[['csFRiP']]))
+print(cbind(stats_cs[, c('Sample', 'Status', 'StatusReason', 'PctNuclear', 'csFRiP')], csFRiP_in = stats_in_cs[['csFRiP']]))
