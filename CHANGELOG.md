@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-26
+
 ### Added
 - `qc/min_log2_fold`: a library whose TSS calling used an enrichment threshold below this
   now fails QC. Unset by default, falling back to `program/homer/tss/default_log2_fold`,
