@@ -246,6 +246,33 @@ run_unit_smk() {
             --cores 1 \
             --quiet 2>&1 || rc=1
         python tests/e2e/unit_assertions.py qc_initial "$tmp11" --expect-status Ok || rc=1
+
+        # And editing a gate must make Snakemake rerun the rule at all. This is the item
+        # most worth a regression test, because the failure mode is silence: while the
+        # gates reached the script through snakemake@config, no rerun trigger could see
+        # them, so a new gate left the old Status on disk without a word in the log.
+        local dry cfg_moved
+        echo ""
+        echo "--- qc_initial (a changed gate must trigger a rerun) ---"
+        dry=$(snakemake -s "$smk" --configfile "$cfg" \
+            --config "test_outdir=$tmp" --cores 1 -n 2>&1) || rc=1
+        if grep -q "test_qc_initial_tss" <<< "$dry"; then
+            echo "  FAIL: the rule is scheduled to rerun with an unchanged config" >&2
+            rc=1
+        else
+            echo "  ok  unchanged config: nothing to redo"
+        fi
+        cfg_moved=$(make_cfg "$tmp" "$tmp" "$tmp/index/genome.fa" --min-log2-fold -1)
+        dry=$(snakemake -s "$smk" --configfile "$cfg_moved" \
+            --config "test_outdir=$tmp" --cores 1 -n 2>&1) || rc=1
+        if grep -q "test_qc_initial_tss" <<< "$dry"; then
+            echo "  ok  changed gate: the rule is scheduled to rerun"
+        else
+            echo "  FAIL: changing qc/min_log2_fold did not schedule a rerun; the gate is" >&2
+            echo "        not reaching the rule as a param" >&2
+            rc=1
+        fi
+        rm -f "$cfg_moved"
     fi
 
     if [[ "$rule_name" == "qc_final" ]]; then
