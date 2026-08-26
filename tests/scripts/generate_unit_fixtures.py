@@ -192,6 +192,48 @@ def write_qc_initial_cs(path):
         for sample, status in QC_INITIAL_CS:
             fh.write(f"{sample}\t{status}\n")
 
+# ── Per-library HOMER stats files, for the enrichment-threshold gate ───────────
+# The three csRNA thresholds are real values from an Arabidopsis panel: 1.686 is what
+# HOMER picks for a sound library, while 0.144 and -0.680 are what it picks for libraries
+# that have lost their capped signal. A negative threshold accepts clusters carrying less
+# signal than their own input, so with the gate falling back to default_log2_fold (1) the
+# first library passes and the other two fail.
+LOG2_THRESHOLDS = {
+    "condA_csrna1": 1.6858595532089,
+    "condA_csrna2": 0.144,
+    "condB_csrna1": -0.680,
+    "condA_input1": 1.5,
+    "condA_input2": 1.4,
+}
+
+
+def write_tss_stats(path, sample, threshold):
+    """A trimmed findcsRNATSS.pl stats.txt: the shape the parser has to cope with,
+    including the tab-indented threshold line and the -rna block that follows it with
+    HOMER's no-op sentinel in place."""
+    with open(path, "w") as fh:
+        fh.write(
+            f"cmd = findcsRNATSS.pl tagdir/{sample} -i tagdir/paired -o tss/{sample}"
+            " -genome genome.fa -size 100 -gtf annotation.gtf\n\n"
+            "Total csRNA reads: 500.0\n"
+            "Total input reads: 450.0\n\n"
+            "total putative TSS clusters\t12\n"
+            "Valid TSS clusters\t10\n\n"
+            "Fraction Promoter-Distal TSS clusters: 20.00%\n"
+            "Fraction of stable transcript TSS clusters: na\n\n"
+            "vs. Input (-i):\n"
+            f"\tlog2 fold vs. input: {threshold}\n"
+            "\tMaximum CDF difference: 0.81\n"
+            "\tTotal TP (tss) regions: 15\n"
+            "\tTotal FP (exon) regions: 5\n\n"
+            "vs. RNA-seq (-rna):\n"
+            "\tlog2 fold vs. rna: -10000000000\n"
+            "\tMaximum CDF difference: -10000000000\n"
+            "\tTotal TP (tss) regions: 0\n"
+            "\tTotal FP (exon) regions: 0\n"
+        )
+
+
 # ── HOMER tag directories for tss_size_composition.R ───────────────────────────
 # Reads placed inside the consensus clusters with chosen lengths, so both read-size
 # filters have a known right answer. Each entry is (n_reads, length) and a list per TSS
@@ -324,6 +366,12 @@ def main():
     print("  tss.consensus.sizes.txt")
     write_qc_initial_cs(os.path.join(UF, "qc_initial_cs.txt"))
     print("  qc_initial_cs.txt")
+
+    tss_dir = os.path.join(UF, "tss")
+    os.makedirs(tss_dir, exist_ok=True)
+    for sid, threshold in LOG2_THRESHOLDS.items():
+        write_tss_stats(os.path.join(tss_dir, f"{sid}.stats.txt"), sid, threshold)
+    print("  tss/*.stats.txt")
 
     # HOMER quant matrices
     write_homer_quant(os.path.join(UF, "tss.consensus.homer.raw.txt"), CS_TSS, CS_IDS, QUANT_CS_CS)

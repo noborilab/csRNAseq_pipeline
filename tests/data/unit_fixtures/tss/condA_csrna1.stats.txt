@@ -1,0 +1,22 @@
+cmd = findcsRNATSS.pl tagdir/condA_csrna1 -i tagdir/paired -o tss/condA_csrna1 -genome genome.fa -size 100 -gtf annotation.gtf
+
+Total csRNA reads: 500.0
+Total input reads: 450.0
+
+total putative TSS clusters	12
+Valid TSS clusters	10
+
+Fraction Promoter-Distal TSS clusters: 20.00%
+Fraction of stable transcript TSS clusters: na
+
+vs. Input (-i):
+	log2 fold vs. input: 1.6858595532089
+	Maximum CDF difference: 0.81
+	Total TP (tss) regions: 15
+	Total FP (exon) regions: 5
+
+vs. RNA-seq (-rna):
+	log2 fold vs. rna: -10000000000
+	Maximum CDF difference: -10000000000
+	Total TP (tss) regions: 0
+	Total FP (exon) regions: 0

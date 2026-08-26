@@ -186,6 +186,31 @@ def assert_alignment_accounting(outdir: str, cs_samples, in_samples) -> None:
     ok("QC tables agree with the alignment summaries, and the loss adds up")
 
 
+def assert_log2_threshold(outdir: str, cs_samples, in_samples) -> None:
+    """Log2FoldThreshold in the QC tables is the threshold HOMER actually used.
+
+    Checked against HOMER's own stats file rather than against an expected number, so
+    it holds whether HOMER derived the threshold from an annotation or fell back to
+    -defaultLog2Fold.
+    """
+    for fname, ids in (("qc/qc_initial_cs.txt", cs_samples),
+                       ("qc/qc_initial_in.txt", in_samples)):
+        with open(os.path.join(outdir, fname)) as fh:
+            rows = {r["Sample"]: r for r in csv.DictReader(fh, delimiter="\t")}
+        for s in ids:
+            if "Log2FoldThreshold" not in rows[s]:
+                fail(f"{fname} has no Log2FoldThreshold column")
+            stats = os.path.join(outdir, "tss", f"{s}.stats.txt")
+            line = next((l for l in open(stats) if "log2 fold vs. input:" in l), None)
+            if line is None:
+                fail(f"{stats} has no 'log2 fold vs. input' line")
+            want = float(line.split(":")[1])
+            have = float(rows[s]["Log2FoldThreshold"])
+            if abs(want - have) > 1e-9:
+                fail(f"{fname}: {s} Log2FoldThreshold is {have}, but {stats} says {want}")
+    ok("Log2FoldThreshold matches the threshold HOMER reported for every library")
+
+
 def main(outdir: str, filter_pass: bool, skip_golden: bool = False,
          no_annotation: bool = False) -> None:
     print(f"Checking outputs in: {outdir}")
@@ -239,6 +264,7 @@ def main(outdir: str, filter_pass: bool, skip_golden: bool = False,
         ok(f"{label} has {expected_n} rows")
 
     assert_alignment_accounting(outdir, cs_samples, ["condA_input1", "condA_input2"])
+    assert_log2_threshold(outdir, cs_samples, ["condA_input1", "condA_input2"])
 
     # qc_final_cs.txt must have all expected columns
     import csv

@@ -10,6 +10,30 @@ cs_to_in      <- setNames(paired_in_ids, cs_ids)
 # here so the resolved number is what triggers a rerun.
 MIN_CS_FRIP     <- as.numeric(snakemake@params[["min_cs_frip"]])
 MIN_PCT_NUCLEAR <- as.numeric(snakemake@params[["min_pct_nuclear"]])
+# Not a final-specific gate: the threshold HOMER chose is a property of the library rather
+# than of the TSS set being measured, so both tables apply the same floor and agree on why
+# a library failed.
+MIN_LOG2_FOLD   <- as.numeric(snakemake@params[["min_log2_fold"]])
+TSS_DIR         <- trimws(snakemake@params[["tss_dir"]])
+
+# The enrichment threshold HOMER chose for this library, out of its own stats file. With
+# an annotation it picks the threshold from the data per library and there is no flag to
+# floor it, so reading it back is the only way to gate on it. The line is always present
+# when -i was given, which this pipeline always does: with nothing to derive a threshold
+# from, HOMER falls back to -defaultLog2Fold and writes that value here, so the number is
+# the threshold that was actually in force either way. NA when the file is missing or
+# truncated, which means TSS calling for that library did not finish, and counts as a
+# failure below rather than as a pass.
+read_log2_threshold <- function(sample, dir) {
+    path <- file.path(dir, paste0(sample, ".stats.txt"))
+    if (!file.exists(path)) return(NA_real_)
+    hit <- grep("log2 fold vs. input:", readLines(path, warn = FALSE),
+                fixed = TRUE, value = TRUE)
+    if (!length(hit)) return(NA_real_)
+    suppressWarnings(as.numeric(
+        sub(".*log2 fold vs\\. input:[[:space:]]*", "", hit[1])
+    ))
+}
 
 stats_cs <- read.table(trimws(snakemake@input[["stats_cs"]]), header = TRUE, stringsAsFactors = FALSE)
 stats_in <- read.table(trimws(snakemake@input[["stats_in"]]), header = TRUE, stringsAsFactors = FALSE)
@@ -192,6 +216,10 @@ stats_cs[["StrandBalance"]] <- with(stats_cs, PosReads / (PosReads + NegReads))
 stats_in[["StrandBalance"]] <- with(stats_in, PosReads / (PosReads + NegReads))
 stats_cs[["PctNuclear"]] <- 100 * (stats_cs[["NuclearReads"]] / stats_cs[["TotalReads"]])
 stats_in[["PctNuclear"]] <- 100 * (stats_in[["NuclearReads"]] / stats_in[["TotalReads"]])
+stats_cs[["Log2FoldThreshold"]] <- vapply(stats_cs[["Sample"]], read_log2_threshold,
+                                          numeric(1), dir = TSS_DIR, USE.NAMES = FALSE)
+stats_in[["Log2FoldThreshold"]] <- vapply(stats_in[["Sample"]], read_log2_threshold,
+                                          numeric(1), dir = TSS_DIR, USE.NAMES = FALSE)
 
 # Same gate-to-Status logic as qc_initial_tss.R, against the final numbers. StatusReason
 # names the gates that tripped; an NA gate counts as a failure, since a gate that cannot
@@ -207,8 +235,9 @@ qc_status <- function(gates) {
 }
 
 status <- qc_status(list(
-    csFRiP     = stats_cs[["csFRiP"]]     > MIN_CS_FRIP,
-    PctNuclear = stats_cs[["PctNuclear"]] > MIN_PCT_NUCLEAR
+    csFRiP            = stats_cs[["csFRiP"]]     > MIN_CS_FRIP,
+    PctNuclear        = stats_cs[["PctNuclear"]] > MIN_PCT_NUCLEAR,
+    Log2FoldThreshold = stats_cs[["Log2FoldThreshold"]] >= MIN_LOG2_FOLD
 ))
 stats_cs[["Status"]] <- status[["Status"]]
 stats_cs[["StatusReason"]] <- status[["StatusReason"]]
@@ -222,5 +251,6 @@ readr::write_tsv(stats_in, snakemake@output[["qc_in"]])
 cat("Final TSS set: ", n_final, " of ", n_consensus,
     " consensus TSSs retained (", n_consensus - n_final, " filtered)\n", sep = "")
 cat("Printing summary stats:\n")
-print(cbind(stats_cs[, c("Sample", "Status", "StatusReason", "PctNuclear", "csFRiP")],
+print(cbind(stats_cs[, c("Sample", "Status", "StatusReason", "PctNuclear", "csFRiP",
+                        "Log2FoldThreshold")],
             csFRiP_in = stats_in_cs[["csFRiP"]]))

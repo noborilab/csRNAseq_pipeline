@@ -29,6 +29,7 @@ All committed test data lives in `tests/data/`:
 | `unit_fixtures/tagdir/` | Miniature HOMER tag directories whose read lengths are chosen so the read-size composition filter has a known right answer, alongside the expected `tss.consensus.sizes.txt` |
 | `unit_fixtures/qc_initial_cs.txt` | Minimal QC table for the consensus QC gate; `condB_csrna1` is FAIL and is the only library seeing `TSS_7`, so excluding failed libraries is observable |
 | `golden/` | Committed `qc_final_*.txt` from a default e2e run, compared value-by-value so a metric changing silently fails the suite. Refresh with `tests/scripts/update_golden.sh <e2e outdir>` once you have checked the diff is intended |
+| `unit_fixtures/tss/` | Trimmed per-library `stats.txt` files carrying the enrichment threshold HOMER chose, for the `qc/min_log2_fold` gate. 1.686 passes a floor of 1; 0.144 and -0.680, both real values from an Arabidopsis panel, do not |
 
 ### Regenerating fixtures
 
@@ -45,6 +46,21 @@ python tests/scripts/generate_unit_fixtures.py
 ```
 
 Commit the resulting files. (Both scripts are deterministic, with a fixed seed, so regenerating without changing the design should give you identical output.)
+
+### Refreshing the golden tables
+
+Adding or removing a QC column fails the golden comparison by design, and `run_tests.sh`
+deletes its own output directory on the way out, so the refresh needs a run you keep:
+
+```bash
+tmp=$(mktemp -d)
+cfg=$(python tests/scripts/make_test_config.py "$tmp" "$tmp" "$tmp/index/genome.fa")
+snakemake --cores 4 -s workflow/Snakefile --configfile "$cfg"
+tests/scripts/update_golden.sh "$tmp"    # prints the diff before overwriting
+```
+
+Read the diff before committing it. A changed column set is expected after a deliberate
+change; a changed *value* in a column you did not touch is a regression.
 
 ## Unit tests
 

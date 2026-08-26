@@ -191,9 +191,48 @@ filtering:
   exclude_failed_from_consensus: true
 ```
 
-`Status` is FAIL when `csFRiP` is below `qc / min_cs_frip` or nuclear percentage is below
-`qc / min_pct_nuclear`. Consider `tss_min_reps: 2` alongside it, so that no single library
-can inject a cluster on its own.
+`Status` is FAIL when `csFRiP` is below `qc / min_cs_frip`, nuclear percentage is below
+`qc / min_pct_nuclear`, or the enrichment threshold HOMER chose is below
+`qc / min_log2_fold`; `StatusReason` says which. Consider `tss_min_reps: 2` alongside it,
+so that no single library can inject a cluster on its own.
+
+### `qc / min_log2_fold`
+
+Minimum enrichment threshold a library's TSS calling may use before the library fails QC.
+Unset by default, in which case it falls back to `program / homer / tss / default_log2_fold`.
+
+With an annotation, HOMER chooses this threshold per library from the data rather than
+using `default_log2_fold`, and writes its choice into `tss/<sample>.stats.txt` as
+`log2 fold vs. input`. For sound libraries it picks sensible values (log2 1.4 to 1.9 on one
+Arabidopsis panel) and cluster counts drop 4 to 10%. For libraries that have lost their
+capped signal it picks thresholds at or below zero:
+
+```
+library                chosen log2FC    valid clusters, no GTF -> with GTF
+polyphos_tex_csrna1            0.144     26,025 -> 43,454   (+67%)
+polyphos_tex_csrna2            0.007      7,613 -> 28,816  (+278%)
+tex_only_csrna1               -0.680     14,229 -> 28,864  (+103%)
+tex_only_csrna2               -0.056     18,874 -> 24,677   (+31%)
+```
+
+A negative threshold accepts clusters carrying less signal than their own input, which
+cannot be a TSS under any reading, and the annotation therefore makes a bad library look
+more productive rather than less. Because the consensus is a union, those calls propagate:
+on that panel 25,871 of 80,887 final clusters rested on those four libraries alone. The
+threshold is chosen inside HOMER and there is no flag to floor it, so the pipeline reads it
+back and gates on it.
+
+The fallback is the defensible bound rather than zero: a data-driven threshold should never
+end up looser than the constant it replaced. Set the key explicitly to gate independently
+of `default_log2_fold`.
+
+```yaml
+qc:
+  min_log2_fold: 1.0
+```
+
+A library that trips this gate is FAIL with `Log2FoldThreshold` in its `StatusReason`, and
+`filtering / exclude_failed_from_consensus` is what keeps its clusters out of the union.
 
 ### `program / keep_unmapped_sample`
 
@@ -336,7 +375,7 @@ changing it re-runs the `tss_size_composition` rule.
 | `gather_stats` | Extract total reads, organellar reads, and tag frequencies from HOMER tagInfo files, plus the alignment loss (`AlignedReads`, `BelowMapqReads`, `FilteredOutReads`) from the per-library alignment summaries. |
 | `merge_initial_tss` | Strand-aware merge of all per-sample TSS BEDs. Chromosomes not in `chrom_sizes` are excluded. |
 | `quantify_initial_{cs,in}_tss` | HOMER `annotatePeaks.pl` quantification of merged TSS sets in all libraries. |
-| `qc_initial_tss` | Calculate FRiP, nuclear read %, csRNA enrichment, miRNA depletion, and phosphorylation efficiency. Samples with FRiP < `min_cs_frip` or nuclear % < `min_pct_nuclear` are flagged as FAIL, with `StatusReason` naming the gates that tripped. The gates reach the script as rule params, so editing one and rerunning with `--rerun-triggers params` (Snakemake's default set includes `params`) recomputes the table. |
+| `qc_initial_tss` | Calculate FRiP, nuclear read %, csRNA enrichment, miRNA depletion, and phosphorylation efficiency. Samples with FRiP < `min_cs_frip`, nuclear % < `min_pct_nuclear`, or an enrichment threshold below `min_log2_fold` are flagged as FAIL, with `StatusReason` naming the gates that tripped. The gates reach the script as rule params, so editing one and rerunning with `--rerun-triggers params` (Snakemake's default set includes `params`) recomputes the table. |
 | `collect_consensus_tss` | Build the consensus TSS set (`tss.consensus.bed`) from csRNA samples, requiring detection in at least `tss_min_reps` replicates. TSSs narrower than 150 bp are padded; overlapping TSSs are split. TSSs overlapping miRNA / pre-tRNA loci (if `qc / mirnas` and `qc / trnas` are set) are removed. |
 | `quantify_final_tss` | HOMER quantification of the consensus TSSs in all csRNA libraries. |
 | `tss_size_composition_library` | Per-cluster read counts, small-RNA-sized read counts and top-1..N length concentration for one csRNA library, from its tag directory. One job per library, so Snakemake runs them in parallel. Reads nothing when both size filters are off. |
@@ -382,6 +421,7 @@ The `qc_initial_cs.txt` / `qc_initial_in.txt` tables contain the columns below. 
 
 | Column | Description |
 |--------|-------------|
+| `Log2FoldThreshold` | The enrichment threshold this library's TSS calling actually used, read back from `tss/<sample>.stats.txt`. Chosen by HOMER from the data when an annotation is available, otherwise `program / homer / tss / default_log2_fold`. Gated by `qc / min_log2_fold`. `NA` means TSS calling for the library did not finish, which counts as a failure. |
 | `AlignedReads` | Reads with a primary alignment, counted before filtering. `TrimmedReads` minus this is the reads that never aligned. |
 | `BelowMapqReads` | Aligned reads discarded by `filtering / alignment_mapq`, which in practice means multi-mappers. |
 | `FilteredOutReads` | Aligned reads that cleared MAPQ and were then discarded by `exclude_flags`, `include_flags`, `min_alignment_length` or `max_mismatch`. |

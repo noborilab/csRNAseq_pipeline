@@ -231,15 +231,28 @@ run_unit_smk() {
     fi
 
     if [[ "$rule_name" == "qc_initial" ]]; then
-        # tests/data/config.yaml gates at 0.0, so every fixture library passes and no
-        # StatusReason should be populated.
-        python tests/e2e/unit_assertions.py qc_initial "$tmp" --expect-status Ok || rc=1
+        # Drop the enrichment floor below the worst fixture threshold (-0.680). Every
+        # library then passes, which is what shows the gate is the configured number
+        # rather than a constant, and that the two failures above were its work.
+        local tmp11 cfg11
+        tmp11=$(mktemp -d)
+        cfg11=$(make_cfg "$tmp11" "$tmp11" "$tmp11/index/genome.fa" --min-log2-fold -1)
+        trap "rm -rf $tmp11 $cfg11" EXIT
+        echo ""
+        echo "--- qc_initial (min_log2_fold -1, below every fixture threshold) ---"
+        snakemake -s "$smk" \
+            --configfile "$cfg11" \
+            --config "test_outdir=$tmp11" \
+            --cores 1 \
+            --quiet 2>&1 || rc=1
+        python tests/e2e/unit_assertions.py qc_initial "$tmp11" --expect-status Ok || rc=1
     fi
 
     if [[ "$rule_name" == "qc_final" ]]; then
         # The default run leaves min_cs_frip_final unset, which is the path every existing
         # config takes: the final gate falls back to the initial one and nothing changes.
-        python tests/e2e/unit_assertions.py qc_final "$tmp" --expect-status Ok || rc=1
+        # Both default runs are asserted against the fixture panel by the plain
+        # invocation above, which is where the enrichment-threshold gate is checked.
 
         # Then set the final gate away from the initial one. The two tables measure csFRiP
         # against different TSS sets, so disagreeing is the point rather than a fault.

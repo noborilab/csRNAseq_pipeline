@@ -139,6 +139,23 @@ def assert_collect_consensus(outdir: str, expect_clusters: int = None) -> None:
     ok("No overlapping TSSs on the same strand")
 
 
+# What the fixtures should produce with the gates in tests/data/config.yaml (csFRiP and
+# nuclear gates at 0.0, so neither can fire) and min_log2_fold falling back to
+# default_log2_fold, which is 1. The enrichment thresholds in unit_fixtures/tss are real
+# values from an Arabidopsis panel: 1.686 for a sound library, 0.144 and -0.680 for two
+# that lost their capped signal.
+QC_FIXTURE_STATUS = {
+    "condA_csrna1": ("Ok",   ""),
+    "condA_csrna2": ("FAIL", "Log2FoldThreshold"),
+    "condB_csrna1": ("FAIL", "Log2FoldThreshold"),
+}
+QC_FIXTURE_THRESHOLDS = {
+    "condA_csrna1": 1.6858595532089,
+    "condA_csrna2": 0.144,
+    "condB_csrna1": -0.680,
+}
+
+
 def check_status(path: str, basis: str, expect_status: str = None,
                  expect_reason: str = None) -> None:
     """Status, StatusReason and StatusBasis in one of the csRNA QC tables.
@@ -158,12 +175,33 @@ def check_status(path: str, basis: str, expect_status: str = None,
              f"{wrong_basis}")
     ok(f"{os.path.basename(path)} has Status, StatusReason and StatusBasis={basis}")
 
-    if expect_status is not None:
-        wrong = [(r["Sample"], r["Status"]) for r in rows if r["Status"] != expect_status]
+    # The threshold gate reads a file per library, so check the column made it across
+    # before checking what it decided.
+    wrong_threshold = [
+        (r["Sample"], r["Log2FoldThreshold"]) for r in rows
+        if abs(float(r["Log2FoldThreshold"]) - QC_FIXTURE_THRESHOLDS[r["Sample"]]) > 1e-9
+    ]
+    if wrong_threshold:
+        fail(f"{os.path.basename(path)}: Log2FoldThreshold not parsed from the stats "
+             f"fixtures: {wrong_threshold}")
+    ok("Log2FoldThreshold matches the stats fixtures")
+
+    if expect_status is None:
+        # The fixture panel is built so that the threshold gate, and only it, fires.
+        wrong = [
+            (r["Sample"], r["Status"], r["StatusReason"]) for r in rows
+            if (r["Status"], r["StatusReason"]) != QC_FIXTURE_STATUS[r["Sample"]]
+        ]
         if wrong:
-            fail(f"{os.path.basename(path)}: expected Status {expect_status} for every "
-                 f"library, got {wrong}")
-        ok(f"every library is {expect_status}")
+            fail(f"{os.path.basename(path)}: expected {QC_FIXTURE_STATUS}, got {wrong}")
+        ok("Status and StatusReason match the fixture panel")
+        return
+
+    wrong = [(r["Sample"], r["Status"]) for r in rows if r["Status"] != expect_status]
+    if wrong:
+        fail(f"{os.path.basename(path)}: expected Status {expect_status} for every "
+             f"library, got {wrong}")
+    ok(f"every library is {expect_status}")
     if expect_reason is not None:
         wrong = [(r["Sample"], r["StatusReason"]) for r in rows
                  if expect_reason not in r["StatusReason"].split(",")]

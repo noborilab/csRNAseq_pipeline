@@ -39,6 +39,9 @@ def main():
                    help="Set qc/min_cs_frip_final (unset means fall back to min_cs_frip)")
     p.add_argument("--min-pct-nuclear-final", type=float, default=None,
                    help="Set qc/min_pct_nuclear_final")
+    p.add_argument("--min-log2-fold", type=float, default=None,
+                   help="Set qc/min_log2_fold (unset means fall back to "
+                        "program/homer/tss/default_log2_fold)")
     p.add_argument("--gtf", default=None,
                    help="Set program/homer/tss/gtf (repo-relative path)")
     p.add_argument("--alignment-program",
@@ -91,6 +94,8 @@ def main():
         cfg["qc"]["min_cs_frip_final"] = args.min_cs_frip_final
     if args.min_pct_nuclear_final is not None:
         cfg["qc"]["min_pct_nuclear_final"] = args.min_pct_nuclear_final
+    if args.min_log2_fold is not None:
+        cfg["qc"]["min_log2_fold"] = args.min_log2_fold
     if args.gtf is not None:
         cfg["program"]["homer"]["tss"]["gtf"] = abs_fixture(args.gtf)
     if args.alignment_program is not None:

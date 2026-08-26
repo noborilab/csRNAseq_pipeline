@@ -13,6 +13,10 @@ FIXTURES = "tests/data/unit_fixtures"
 TEST_OUTDIR = config.get("test_outdir", "tests/unit/tmp_qc_final")
 
 
+CS_IDS = ["condA_csrna1", "condA_csrna2", "condB_csrna1"]
+IN_IDS = ["condA_input1", "condA_input2"]
+
+
 def gate(key, fallback):
     """The same fallback the Snakefile resolves: a final gate left unset uses the
     initial one, so an existing config behaves exactly as it did before the final
@@ -63,6 +67,7 @@ rule test_qc_final_tss:
         tss_in=FIXTURES + "/merged_in.bed",
         stats_cs=FIXTURES + "/stats_cs.txt",
         stats_in=FIXTURES + "/stats_in.txt",
+        tss_stats=[FIXTURES + "/tss/" + s + ".stats.txt" for s in CS_IDS + IN_IDS],
         repl_cor_initial=FIXTURES + "/repl_cor_initial.txt",
     output:
         qc_cs=TEST_OUTDIR + "/qc_final_cs.txt",
@@ -75,5 +80,10 @@ rule test_qc_final_tss:
         trnas=config.get("qc", {}).get("trnas") or "",
         min_cs_frip=gate("min_cs_frip_final", config["qc"]["min_cs_frip"]),
         min_pct_nuclear=gate("min_pct_nuclear_final", config["qc"]["min_pct_nuclear"]),
+        min_log2_fold=gate(
+            "min_log2_fold",
+            config["program"]["homer"]["tss"].get("default_log2_fold", 1),
+        ),
+        tss_dir=FIXTURES + "/tss",
     script:
         "../../workflow/scripts/qc_final_tss.R"

@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `qc/min_log2_fold`: a library whose TSS calling used an enrichment threshold below this
+  now fails QC. Unset by default, falling back to `program/homer/tss/default_log2_fold`,
+  so with the shipped default of 1 any library whose threshold came out below 2-fold is
+  flagged; see the warning under Changed, because this one moves TSS calls.
+  With an annotation HOMER chooses the threshold per library from the data, writes it to
+  `tss/<sample>.stats.txt`, and offers no flag to floor it. On libraries that have lost
+  their capped signal it picks values at or below zero (0.144, 0.007, -0.056 and -0.680 on
+  one 22-library panel), which accepts clusters carrying less signal than their own input.
+  Their promoter-distal fractions ran 48 to 54% against 19 to 24% for the sound libraries,
+  so the extra calls are mostly not at promoters, and because the consensus is a union
+  they propagate: 25,871 of 80,887 final clusters on that panel rested on those four
+  libraries alone. The pipeline now reads the threshold back and gates on it, and reports
+  it as a new `Log2FoldThreshold` column in both QC tables.
 - `AlignedReads`, `BelowMapqReads` and `FilteredOutReads` in the stats and QC tables,
   between `TrimmedReads` and `TotalReads`. That gap is the largest single loss anywhere in
   the pipeline (a median 74.9% per library, 2,149 M of 2,954 M reads, on one 34-library
@@ -45,6 +58,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one.
 
 ### Changed
+- **`qc/min_log2_fold` changes which libraries pass QC**, and with
+  `filtering/exclude_failed_from_consensus` on it changes the consensus set, so an
+  existing analysis will shift. Compare before adopting, as with the `-gtf` entry in
+  0.8.0. On the panel above it removes the four collapsed libraries and the 25,871
+  clusters that rested on them alone.
 - `rule align` runs a counter in the alignment pipe, so its shell command has changed and
   Snakemake will want to realign existing runs. The alignment itself is untouched: the awk
   passes the stream through byte for byte, which the test suite asserts.

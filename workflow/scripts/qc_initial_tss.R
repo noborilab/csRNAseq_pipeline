@@ -16,6 +16,8 @@ TRNAS <- snakemake@params[["trnas"]]
 # nothing in the log to say the new gate had been ignored.
 MIN_CS_FRIP <- as.numeric(snakemake@params[["min_cs_frip"]])
 MIN_PCT_NUCLEAR <- as.numeric(snakemake@params[["min_pct_nuclear"]])
+MIN_LOG2_FOLD <- as.numeric(snakemake@params[["min_log2_fold"]])
+TSS_DIR <- trimws(snakemake@params[["tss_dir"]])
 OUT_CS <- snakemake@output[["qc_cs"]]
 OUT_IN <- snakemake@output[["qc_in"]]
 OUT_REPLCOR <- snakemake@output[["repl_cor"]]
@@ -177,6 +179,30 @@ if (!is.null(mirna)) {
     stats_in[['miRNAPct']] <- with(stats_in, 100 * (miRNA / (miRNA + csRiP)))
 }
 
+# The enrichment threshold HOMER chose for this library, out of its own stats file. With
+# an annotation it picks the threshold from the data per library and there is no flag to
+# floor it, so reading it back is the only way to gate on it. The line is always present
+# when -i was given, which this pipeline always does: with nothing to derive a threshold
+# from, HOMER falls back to -defaultLog2Fold and writes that value here, so the number is
+# the threshold that was actually in force either way. NA when the file is missing or
+# truncated, which means TSS calling for that library did not finish, and counts as a
+# failure below rather than as a pass.
+read_log2_threshold <- function(sample, dir) {
+    path <- file.path(dir, paste0(sample, ".stats.txt"))
+    if (!file.exists(path)) return(NA_real_)
+    hit <- grep("log2 fold vs. input:", readLines(path, warn = FALSE),
+                fixed = TRUE, value = TRUE)
+    if (!length(hit)) return(NA_real_)
+    suppressWarnings(as.numeric(
+        sub(".*log2 fold vs\\. input:[[:space:]]*", "", hit[1])
+    ))
+}
+
+stats_cs[['Log2FoldThreshold']] <- vapply(stats_cs[['Sample']], read_log2_threshold,
+                                          numeric(1), dir = TSS_DIR, USE.NAMES = FALSE)
+stats_in[['Log2FoldThreshold']] <- vapply(stats_in[['Sample']], read_log2_threshold,
+                                          numeric(1), dir = TSS_DIR, USE.NAMES = FALSE)
+
 # Status is a bare Ok/FAIL, which says nothing about which gate tripped. StatusReason
 # names them, so a library that fails is legible without re-deriving every gate by hand.
 # A gate that cannot be evaluated counts as a failure: an NA is not evidence that the
@@ -192,8 +218,12 @@ qc_status <- function(gates) {
 }
 
 status <- qc_status(list(
-    csFRiP     = stats_cs[['csFRiP']]     > MIN_CS_FRIP,
-    PctNuclear = stats_cs[['PctNuclear']] > MIN_PCT_NUCLEAR
+    csFRiP            = stats_cs[['csFRiP']]     > MIN_CS_FRIP,
+    PctNuclear        = stats_cs[['PctNuclear']] > MIN_PCT_NUCLEAR,
+    # >= rather than >, so a library using exactly the configured floor passes. That is
+    # the common case: with no annotation every library lands on default_log2_fold, which
+    # is also what this gate falls back to.
+    Log2FoldThreshold = stats_cs[['Log2FoldThreshold']] >= MIN_LOG2_FOLD
 ))
 stats_cs[['Status']] <- status[['Status']]
 stats_cs[['StatusReason']] <- status[['StatusReason']]
@@ -206,4 +236,4 @@ readr::write_tsv(stats_cs, OUT_CS)
 readr::write_tsv(stats_in, OUT_IN)
 
 cat('Printing summary stats:\n')
-print(cbind(stats_cs[, c('Sample', 'Status', 'StatusReason', 'PctNuclear', 'csFRiP')], csFRiP_in = stats_in_cs[['csFRiP']]))
+print(cbind(stats_cs[, c('Sample', 'Status', 'StatusReason', 'PctNuclear', 'csFRiP', 'Log2FoldThreshold')], csFRiP_in = stats_in_cs[['csFRiP']]))

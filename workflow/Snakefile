@@ -138,6 +138,13 @@ MIN_PCT_NUCLEAR = config["qc"]["min_pct_nuclear"]
 # that the set they are measured against got smaller.
 MIN_CS_FRIP_FINAL = resolve_gate("min_cs_frip_final", MIN_CS_FRIP)
 MIN_PCT_NUCLEAR_FINAL = resolve_gate("min_pct_nuclear_final", MIN_PCT_NUCLEAR)
+# HOMER chooses the enrichment threshold per library when it has an annotation, and no
+# flag floors it, so the floor lives here: a library whose chosen threshold is below this
+# fails QC. Falling back to default_log2_fold is the defensible bound, since a data-driven
+# threshold should never end up looser than the constant it replaced.
+MIN_LOG2_FOLD = resolve_gate(
+    "min_log2_fold", config["program"]["homer"]["tss"]["default_log2_fold"]
+)
 
 
 def index_sentinel(aln, index):
@@ -890,6 +897,11 @@ rule qc_initial_tss:
         stats_in=OUTPUT_DIR + "/qc/stats_initial_in.txt",
         tss_cs=OUTPUT_DIR + "/tss_merged/all_cs.tss_merged.bed",
         tss_in=OUTPUT_DIR + "/tss_merged/all_in.tss_merged.bed",
+        # Read where Status is decided rather than in gather_stats.sh, which runs off tag
+        # directories and has no dependency on TSS calling.
+        tss_stats=list(
+            (OUTPUT_DIR + "/tss/") + s + ".stats.txt" for s in sampletab["id"]
+        ),
     output:
         qc_cs=OUTPUT_DIR + "/qc/qc_initial_cs.txt",
         qc_in=OUTPUT_DIR + "/qc/qc_initial_in.txt",
@@ -901,6 +913,8 @@ rule qc_initial_tss:
         trnas=config.get("qc", {}).get("trnas") or "",
         min_cs_frip=MIN_CS_FRIP,
         min_pct_nuclear=MIN_PCT_NUCLEAR,
+        min_log2_fold=MIN_LOG2_FOLD,
+        tss_dir=OUTPUT_DIR + "/tss",
         cs_ids=" ".join(list(sampletab["id"][sampletab["sample_type"] == "csrna"])),
         paired_in_ids=" ".join(
             [
@@ -1150,6 +1164,9 @@ rule qc_final_tss:
         tss_in=OUTPUT_DIR + "/tss_merged/all_in.tss_merged.bed",
         stats_cs=OUTPUT_DIR + "/qc/stats_initial_cs.txt",
         stats_in=OUTPUT_DIR + "/qc/stats_initial_in.txt",
+        tss_stats=list(
+            (OUTPUT_DIR + "/tss/") + s + ".stats.txt" for s in sampletab["id"]
+        ),
         repl_cor_initial=INTERMEDIATE_DIR + "/qc/replicate_correlation_initial.txt",
     output:
         qc_cs=OUTPUT_DIR + "/qc_final_cs.txt",
@@ -1169,5 +1186,10 @@ rule qc_final_tss:
         trnas=config.get("qc", {}).get("trnas") or "",
         min_cs_frip=MIN_CS_FRIP_FINAL,
         min_pct_nuclear=MIN_PCT_NUCLEAR_FINAL,
+        # Not a final-specific gate: the threshold HOMER chose is a property of the
+        # library, not of the TSS set being measured, so both tables gate it the same way
+        # and agree on why a library failed.
+        min_log2_fold=MIN_LOG2_FOLD,
+        tss_dir=OUTPUT_DIR + "/tss",
     script:
         "scripts/qc_final_tss.R"

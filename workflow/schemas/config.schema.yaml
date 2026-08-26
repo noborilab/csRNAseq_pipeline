@@ -524,6 +524,20 @@ properties:
           Minimum percentage of aligned reads originating from nuclear
           chromosomes (i.e. not mitochondrial or plastid). Low values
           indicate organellar contamination.
+      min_log2_fold:
+        type: ["number", "null"]
+        default: null
+        description: >
+          Minimum enrichment threshold a library's TSS calling may use before the
+          library fails QC. With an annotation, HOMER chooses this threshold per
+          library from the data and writes it to tss/<sample>.stats.txt as
+          "log2 fold vs. input"; there is no flag to floor it. On libraries that
+          have lost their capped signal it picks values at or below zero, which
+          accepts clusters carrying less signal than their own input, and those
+          calls then enter the consensus union and are quantified everywhere.
+          Null falls back to program/homer/tss/default_log2_fold, on the grounds
+          that a data-driven threshold should never be looser than the constant it
+          replaced. Set to a number to gate independently of that constant.
       min_cs_frip_final:
         type: ["number", "null"]
         default: null
