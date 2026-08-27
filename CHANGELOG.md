@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-08-27
+
 ### Added
 - `program/keep_below_mapq_sample`, an integer, default 0: keep this many reads per library
   that aligned but fell below `filtering/alignment_mapq`, as
