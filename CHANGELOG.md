@@ -23,13 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `merge_initial_tss` declared its per-sample BED inputs as a bare generator expression
-  rather than a list. A generator yields its items once, so the rule's dependency set
-  could come back short: observed dropping the first library, which let the merge start
-  while that library's TSS calling was still running, and on a rerun where the BED files
-  already existed it would have merged whatever subset survived, silently, producing a
-  merged TSS set missing a library with no error anywhere. Present since the first
-  Snakemake version. Every other rule builds its file lists with `list()`; this one now
-  does too.
+  rather than a list. A generator yields its items once, so the rule's dependency set came
+  back one library short, always the first in the sample table. The shell builds its file
+  list from `params` rather than from `input`, so the merge never silently omitted a
+  library; what it lost was the guarantee that the library had finished being called.
+  Seen both ways: a hard failure where the BED did not exist yet, and, on a 34-library
+  panel, the merge starting in the same second the last TSS call finished. A rerun over
+  existing BED files is the case to worry about, since `cat` can then read a file that is
+  being rewritten. Present since the first Snakemake version. Every other rule builds its
+  file lists with `list()`; this one now does too.
 - `keep_unmapped_sample` wrote a 0-byte, and therefore unreadable, `.fastq.gz` for a
   library with no unmapped reads, because the gzip pipe was closed whether or not anything
   had been written to it. A class with no reads now leaves no file, and the zero is
