@@ -92,13 +92,34 @@ properties:
         minimum: 0
         default: 0
         description: >
-          When above zero, keep this many unmapped reads per library as
-          qc/<sample>.unmapped.sample.fastq.gz. Two thirds of a csRNA-seq
-          library can be lost at alignment, and with keep_bam and
+          When above zero, keep this many reads that never aligned per
+          library, as qc/<sample>.unmapped.sample.fastq.gz. Two thirds of a
+          csRNA-seq library can be lost at alignment, and with keep_bam and
           keep_trimmed_fastq off none of it survives the run, so a
           contaminant screen or a low-complexity check afterwards means
           aligning again. A few hundred thousand reads costs a few MB and
-          answers the question. Default 0 writes nothing.
+          answers the question. Default 0 writes nothing. See
+          keep_below_mapq_sample for the reads that did align but were then
+          discarded, which is a different question.
+      keep_below_mapq_sample:
+        type: integer
+        minimum: 0
+        default: 0
+        description: >
+          When above zero, keep this many reads that aligned but fell below
+          alignment_mapq per library, as
+          qc/<sample>.belowmapq.sample.fastq.gz. With bwa, MAPQ 0 means the
+          read placed equally well somewhere else, so this is the
+          multi-mapping fraction, and in Arabidopsis the obvious suspect is
+          the rDNA arrays that TAIR12 assembles as thousands of rRNA gene
+          copies. That makes this the more informative of the two samples
+          when the question is where a large alignment loss went, since
+          BelowMapqReads is usually the bigger class. Kept separate from the
+          unmapped sample on purpose: the two have opposite implications and
+          mixing them would discard the distinction the counts exist to
+          draw. Sequences are written as sequenced, reverse-complemented
+          back where the alignment was on the reverse strand. Default 0
+          writes nothing.
       bwa_aln:
         type: object
         properties:

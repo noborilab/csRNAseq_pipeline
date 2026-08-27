@@ -234,27 +234,50 @@ qc:
 A library that trips this gate is FAIL with `Log2FoldThreshold` in its `StatusReason`, and
 `filtering / exclude_failed_from_consensus` is what keeps its clusters out of the union.
 
-### `program / keep_unmapped_sample`
+### `program / keep_unmapped_sample` and `program / keep_below_mapq_sample`
 
-Number of unmapped reads to keep per library, as `qc/{sample}.unmapped.sample.fastq.gz`.
-Default 0 writes nothing.
+How many discarded reads to keep per library, from each of the two classes that account
+for most of the alignment loss. Both default to 0, which writes nothing.
+
+| key | file | what it holds |
+|---|---|---|
+| `keep_unmapped_sample` | `qc/{sample}.unmapped.sample.fastq.gz` | reads that never aligned |
+| `keep_below_mapq_sample` | `qc/{sample}.belowmapq.sample.fastq.gz` | reads that aligned but fell below `filtering / alignment_mapq` |
 
 Two thirds of a csRNA-seq library can be lost at alignment (a median 74.9% per library on
 one Arabidopsis panel), and with `keep_bam`, `keep_trimmed_fastq` and
 `bwa_aln / keep_sai` all false, neither the aligned nor the unaligned reads survive the
 run, so a contaminant screen or a low-complexity check afterwards means aligning again.
-A few hundred thousand reads costs a few MB and answers the question.
+A few hundred thousand reads of each costs a few MB and answers the question.
 
 ```yaml
 program:
   keep_unmapped_sample: 200000
+  keep_below_mapq_sample: 200000
 ```
 
-`qc/{sample}.aln.raw.txt` says how large that loss is and how it splits between reads that
-never aligned, reads below the MAPQ floor and reads dropped by the flag and length
-filters; the same three numbers appear in the QC tables as `AlignedReads`,
-`BelowMapqReads` and `FilteredOutReads`. This sample is for asking what the unaligned
-reads actually are.
+They are separate keys and separate files because the two classes mean opposite things. A
+read that never aligned is a read from something that is not in your genome, or is too
+short or too poor to place. A read below the MAPQ floor placed fine and placed somewhere
+else equally well, which with bwa means MAPQ 0 and a multi-mapper. `BelowMapqReads` is
+usually the larger class, and it is the one to look at first when the question is where a
+big loss went: in Arabidopsis the obvious suspect is the rDNA arrays, which TAIR12
+assembles as roughly 4,800 rRNA gene copies that no short read can place uniquely. Mixing
+the two samples into one file would throw away exactly the distinction the counts exist to
+draw.
+
+Two details worth knowing. Reads in the below-MAPQ sample are written as sequenced, so an
+alignment on the reverse strand is reverse-complemented back out of alignment orientation
+first. And each sample is the **first** N reads of its class in the order the aligner
+emitted them, which is roughly flowcell order rather than a random draw: fine for asking
+what these reads are, not a basis for quantifying anything. A library with no reads in a
+class gets no file for it, and `qc/{sample}.aln.raw.txt` records the zero.
+
+With STAR, the below-MAPQ sample comes from the alignment stream like every other aligner,
+while the unmapped sample needs `--outReadsUnmapped Fastx`, which the pipeline adds for
+you. `qc/{sample}.aln.raw.txt` says how large the loss is and how it splits; the same three
+numbers appear in the QC tables as `AlignedReads`, `BelowMapqReads` and
+`FilteredOutReads`. The samples are for asking what those reads actually are.
 
 ### `qc / min_cs_frip_final` and `qc / min_pct_nuclear_final`
 
@@ -412,7 +435,8 @@ All outputs land in `files / output_dir` (default: `results/`):
 | `qc/{sample}.trimming.txt` | bfqutils trimming summary. |
 | `qc/{sample}.aln.txt` | samtools flagstat, run on the **filtered** BAM. It therefore reports 100% mapped for every library and says nothing about what the filter removed; `aln.raw.txt` is the file that does. |
 | `qc/{sample}.aln.raw.txt` | Accounting of the unfiltered alignment: reads seen, unmapped, secondary, supplementary, reads with a primary alignment, then how many of those fell below the MAPQ floor, failed the remaining filters, and passed. Ends with a MAPQ histogram and the filter settings in force. Counted in the pipe, since the unfiltered alignment is never written to disk. |
-| `qc/{sample}.unmapped.sample.fastq.gz` | A sample of unmapped reads, only when `program / keep_unmapped_sample` is above zero. |
+| `qc/{sample}.unmapped.sample.fastq.gz` | The first N reads that never aligned, only when `program / keep_unmapped_sample` is above zero. |
+| `qc/{sample}.belowmapq.sample.fastq.gz` | The first N reads that aligned but fell below `filtering / alignment_mapq`, which with bwa means multi-mappers. Only when `program / keep_below_mapq_sample` is above zero. Written as sequenced, so reverse-strand alignments are reverse-complemented back. |
 | `qc/{sample}.aligner.log` | Aligner stderr (bwa/STAR/bowtie2/hisat2). For STAR, `Log.final.out` is appended to it. |
 
 ## QC Metrics
@@ -476,7 +500,8 @@ On one Arabidopsis panel rRNA came out at 0.07% of aligned 5′ ends, which is n
 for a total-RNA-derived library and is better read as evidence that the rRNA is in the
 discarded multi-mapping fraction: TAIR12 assembles the rDNA arrays as roughly 4,800 rRNA
 gene entries, which no short read can place uniquely. `BelowMapqReads` is how much of the
-library that fraction is.
+library that fraction is, and `program / keep_below_mapq_sample` will hand you the reads
+themselves to identify.
 
 **`csEnrichment` is not a reliable discriminator at these group sizes.** On a panel of two to
 three libraries per condition it could not separate 1.97 from 2.00 for a treatment that

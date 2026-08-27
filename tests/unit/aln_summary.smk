@@ -4,8 +4,8 @@ Unit test for workflow/scripts/aln_summary.awk
 The awk sits in the alignment pipe, so two things have to hold: the stream it passes on
 must be byte-identical to the stream it received, and its counts must partition the reads
 correctly. The SAM fixture holds one record for each branch (unmapped, secondary,
-supplementary, below MAPQ, too short, too many mismatches, no NM tag at all), which the
-synthetic e2e libraries cannot exercise.
+supplementary, below MAPQ on either strand, too short, too many mismatches, no NM tag at
+all), which the synthetic e2e libraries cannot exercise.
 
 Run via tests/run_tests.sh or directly:
     tmp=$(mktemp -d)
@@ -26,15 +26,19 @@ rule test_aln_summary:
         passthrough=TEST_OUTDIR + "/passthrough.sam",
         summary=TEST_OUTDIR + "/aln.raw.txt",
         unmapped=TEST_OUTDIR + "/unmapped.sample.fastq.gz",
+        belowmapq=TEST_OUTDIR + "/belowmapq.sample.fastq.gz",
     params:
         awk=workflow.basedir + "/../../workflow/scripts/aln_summary.awk",
     shell:
         # Gates chosen so every branch fires: maxmm=2 fails one record, minlen=15 fails
-        # another, mapq=30 fails two, and unmapped_n=2 keeps two of the three unmapped
-        # reads so the cap is exercised rather than just the write.
+        # another, mapq=30 fails three. unmapped_n=2 keeps two of the three unmapped
+        # reads, so the cap is exercised rather than just the write; belowmapq_n=3 keeps
+        # all three below-MAPQ reads, so the reverse-strand one is included and the
+        # reverse-complement back to sequenced orientation is checked.
         """
             awk -f {params.awk} -v out={output.summary} \
                 -v mapq=30 -v excl=2308 -v incl=0 -v minlen=15 -v maxmm=2 -v nm_tag=NM \
                 -v unmapped_fq={output.unmapped} -v unmapped_n=2 \
+                -v belowmapq_fq={output.belowmapq} -v belowmapq_n=3 \
                 {input.sam} > {output.passthrough}
         """

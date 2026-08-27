@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `program/keep_below_mapq_sample`, an integer, default 0: keep this many reads per library
+  that aligned but fell below `filtering/alignment_mapq`, as
+  `qc/<sample>.belowmapq.sample.fastq.gz`. `keep_unmapped_sample` samples only records
+  carrying the unmapped flag, so the multi-mapping fraction, which is the larger class and
+  the one that bears on where a big alignment loss went, was counted and then discarded
+  unseen. Separate key and separate file from the unmapped sample, because a read that
+  never aligned and a read that placed equally well elsewhere mean opposite things. Works
+  for every aligner including STAR, whose BAM does contain its below-MAPQ reads.
+  Sequences are written as sequenced, reverse-complemented back where the alignment was on
+  the reverse strand.
+
+### Fixed
+- `merge_initial_tss` declared its per-sample BED inputs as a bare generator expression
+  rather than a list. A generator yields its items once, so the rule's dependency set
+  could come back short: observed dropping the first library, which let the merge start
+  while that library's TSS calling was still running, and on a rerun where the BED files
+  already existed it would have merged whatever subset survived, silently, producing a
+  merged TSS set missing a library with no error anywhere. Present since the first
+  Snakemake version. Every other rule builds its file lists with `list()`; this one now
+  does too.
+- `keep_unmapped_sample` wrote a 0-byte, and therefore unreadable, `.fastq.gz` for a
+  library with no unmapped reads, because the gzip pipe was closed whether or not anything
+  had been written to it. A class with no reads now leaves no file, and the zero is
+  recorded in `qc/<sample>.aln.raw.txt` as before.
+
 ## [0.10.0] - 2026-08-26
 
 ### Added

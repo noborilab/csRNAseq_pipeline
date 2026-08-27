@@ -356,22 +356,33 @@ def assert_size_composition(outdir: str, srna_enabled: bool, top_enabled: bool) 
 
 
 # aln_summary.awk against tests/data/unit_fixtures/aln_summary.sam, hand-counted:
-#   14 records: 3 unmapped, 1 secondary, 1 supplementary, so 9 with a primary alignment
-#   of those 9: 2 below MAPQ 30, 3 failing the rest (NM 5 > 2, rlen 10 < 15, no NM tag),
+#   15 records: 3 unmapped, 1 secondary, 1 supplementary, so 10 with a primary alignment
+#   of those 10: 3 below MAPQ 30, 3 failing the rest (NM 5 > 2, rlen 10 < 15, no NM tag),
 #   4 passing (including one 20M5D5M, whose reference length is 30 rather than 25)
 ALN_SUMMARY_EXPECTED = {
-    "ReadsSeen": 12,
-    "Records": 14,
+    "ReadsSeen": 13,
+    "Records": 15,
     "Unmapped": 3,
     "Secondary": 1,
     "Supplementary": 1,
-    "PrimaryMapped": 9,
-    "BelowMapq": 2,
+    "PrimaryMapped": 10,
+    "BelowMapq": 3,
     "FailedOtherFilters": 3,
     "Passed": 4,
     "UnmappedSampled": 2,
+    "BelowMapqSampled": 3,
 }
-ALN_SUMMARY_MAPQ = {0: 1, 10: 1, 40: 7}
+ALN_SUMMARY_MAPQ = {0: 1, 5: 1, 10: 1, 40: 7}
+
+# The below-MAPQ sample, in stream order. r15 is the point of it: SAM holds its SEQ and
+# QUAL in alignment orientation because it is on the reverse strand, so the sample has to
+# show the read as it was sequenced, or anything downstream of it (BLAST, a complexity
+# check, a comparison against the FASTQ) is looking at the wrong strand.
+ALN_SUMMARY_BELOWMAPQ = [
+    ("r04", "ACGTACGTACGTACGTACGTACGTACGTAC", "IIIIIIIIIIIIIIIIIIIIIIIIIIIIII"),
+    ("r05", "ACGTACGTACGTACGTACGTACGTACGTAC", "IIIIIIIIIIIIIIIIIIIIIIIIIIIIII"),
+    ("r15", "TTTTTTTTTTGGGGGGGGGGCCCCCCCCCC", "##########5555555555IIIIIIIIII"),
+]
 
 
 def assert_aln_summary(outdir: str) -> None:
@@ -380,7 +391,8 @@ def assert_aln_summary(outdir: str) -> None:
     summary_path = os.path.join(outdir, "aln.raw.txt")
     passthrough   = os.path.join(outdir, "passthrough.sam")
     unmapped_fq   = os.path.join(outdir, "unmapped.sample.fastq.gz")
-    for p in (summary_path, passthrough, unmapped_fq):
+    belowmapq_fq  = os.path.join(outdir, "belowmapq.sample.fastq.gz")
+    for p in (summary_path, passthrough, unmapped_fq, belowmapq_fq):
         if not os.path.exists(p):
             fail(f"Missing output: {p}")
 
@@ -428,6 +440,19 @@ def assert_aln_summary(outdir: str) -> None:
         fail(f"unmapped sample has {len(fq_lines)} lines, expected "
              f"{4 * ALN_SUMMARY_EXPECTED['UnmappedSampled']}")
     ok(f"unmapped sample holds {ALN_SUMMARY_EXPECTED['UnmappedSampled']} reads")
+
+    with gzip.open(belowmapq_fq, "rt") as fh:
+        bmq = [l.rstrip("\n") for l in fh if l.strip()]
+    if len(bmq) != 4 * len(ALN_SUMMARY_BELOWMAPQ):
+        fail(f"below-MAPQ sample has {len(bmq)} lines, expected "
+             f"{4 * len(ALN_SUMMARY_BELOWMAPQ)}")
+    for i, (name, seq, qual) in enumerate(ALN_SUMMARY_BELOWMAPQ):
+        got = bmq[4 * i:4 * i + 4]
+        if got != [f"@{name}", seq, "+", qual]:
+            fail(f"below-MAPQ sample record {i} is {got}, expected "
+                 f"{[f'@{name}', seq, '+', qual]}")
+    ok(f"below-MAPQ sample holds {len(ALN_SUMMARY_BELOWMAPQ)} reads, reverse-strand one "
+       "returned to sequenced orientation")
 
 
 RULES = {

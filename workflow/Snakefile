@@ -408,7 +408,7 @@ def build_index_cmd(fasta, index, threads):
         sys.exit("ERROR: Unknown alignment program")
 
 
-def build_aln_cmd(i, o, l_flagstat, l_aln, l_alnraw, l_unmapped, t):
+def build_aln_cmd(i, o, l_flagstat, l_aln, l_alnraw, l_unmapped, l_belowmapq, t):
     aln = config["program"]["alignment_program"]
     excl_f = config["filtering"]["exclude_flags"]
     incl_f = config["filtering"]["include_flags"]
@@ -417,6 +417,7 @@ def build_aln_cmd(i, o, l_flagstat, l_aln, l_alnraw, l_unmapped, t):
     index = config["program"]["genome_index"]
     maxm = config["filtering"]["max_mismatch"]
     keep_unmapped = config["program"]["keep_unmapped_sample"]
+    keep_belowmapq = config["program"]["keep_below_mapq_sample"]
     # STAR uses the lowercase nM tag (mismatches only); other aligners use NM (mismatches+indels).
     nm_tag = "nM" if aln == "STAR" else "NM"
     filter_expr = f"rlen>={minlen} && [{nm_tag}]<={maxm}"
@@ -442,6 +443,10 @@ def build_aln_cmd(i, o, l_flagstat, l_aln, l_alnraw, l_unmapped, t):
             cmd += f"-v star_log={star_log} "
         if keep_unmapped > 0 and sample_unmapped:
             cmd += f"-v unmapped_fq={l_unmapped} -v unmapped_n={keep_unmapped} "
+        # Unlike the unmapped sample, this one works for every aligner: reads below the
+        # MAPQ floor are mapped, so they are in the stream even for STAR.
+        if keep_belowmapq > 0:
+            cmd += f"-v belowmapq_fq={l_belowmapq} -v belowmapq_n={keep_belowmapq} "
         return cmd + "| "
 
     # Where the summary comes from differs by aligner, which is worth stating because it
@@ -565,12 +570,14 @@ rule align:
         else INTERMEDIATE_DIR + "/bam/{sample}.sort.bam.bai",
     log:
         # flagstat runs on the filtered BAM, so it says 100% mapped and nothing else;
-        # alnraw is the accounting of the unfiltered stream. unmapped is only written when
-        # program/keep_unmapped_sample is above zero.
+        # alnraw is the accounting of the unfiltered stream. The two FASTQ samples are
+        # only written when program/keep_unmapped_sample and
+        # program/keep_below_mapq_sample are above zero.
         flagstat=OUTPUT_DIR + "/qc/{sample}.aln.txt",
         aligner=OUTPUT_DIR + "/qc/{sample}.aligner.log",
         alnraw=OUTPUT_DIR + "/qc/{sample}.aln.raw.txt",
         unmapped=OUTPUT_DIR + "/qc/{sample}.unmapped.sample.fastq.gz",
+        belowmapq=OUTPUT_DIR + "/qc/{sample}.belowmapq.sample.fastq.gz",
     benchmark:
         OUTPUT_DIR + "/qc/{sample}.align.benchmark.txt",
     threads: MIN_ALN_THREADS
@@ -584,6 +591,7 @@ rule align:
             "{log.aligner}",
             "{log.alnraw}",
             "{log.unmapped}",
+            "{log.belowmapq}",
             "{threads}",
         )
 
@@ -767,7 +775,13 @@ rule merge_initial_tss:
     message:
         "Merging per-sample TSSs"
     input:
-        (OUTPUT_DIR + "/bed/" + s + ".tss.bed" for s in sampletab["id"]),
+        # list(), not a bare generator: a generator is consumed once, so the rule's
+        # dependency set can come back short and this rule can then run before the
+        # libraries it is merging have been called. Worse, on a rerun where the BED files
+        # already exist it merges whatever subset survived, silently, with no error and a
+        # merged TSS set missing libraries. Every other rule here builds its file lists
+        # with list() for this reason.
+        list(OUTPUT_DIR + "/bed/" + s + ".tss.bed" for s in sampletab["id"]),
     output:
         cs=OUTPUT_DIR + "/tss_merged/all_cs.tss_merged.bed",
         inp=OUTPUT_DIR + "/tss_merged/all_in.tss_merged.bed",

@@ -32,6 +32,11 @@
 #                report is the only place its read accounting exists.
 #   unmapped_fq  optional gzipped FASTQ to sample unmapped reads into
 #   unmapped_n   how many unmapped reads to keep in that sample
+#   belowmapq_fq optional gzipped FASTQ to sample reads that aligned but fell below the
+#                MAPQ floor, which for bwa means multi-mappers. A separate file from the
+#                unmapped one on purpose: the two classes have opposite implications, and
+#                mixing them would throw away the distinction the counts exist to draw.
+#   belowmapq_n  how many of those to keep
 
 function bits_any(flag, mask,   b) {
     # true when flag and mask share a set bit, i.e. samtools -F would drop the record
@@ -72,6 +77,25 @@ function mismatches(   i, prefix) {
     return -1
 }
 
+function revcomp(seq,   i, c, out) {
+    # SAM stores SEQ in alignment orientation, so a reverse-strand record has to be
+    # turned back to give the read as it was sequenced. Unmapped records are never
+    # flipped, which is why the unmapped sample needs none of this.
+    out = ""
+    for (i = length(seq); i >= 1; i--) {
+        c = substr(seq, i, 1)
+        out = out ((c in comp) ? comp[c] : "N")
+    }
+    return out
+}
+
+function reverse_str(str,   i, out) {
+    # the quality string is reversed alongside the sequence, but not complemented
+    out = ""
+    for (i = length(str); i >= 1; i--) out = out substr(str, i, 1)
+    return out
+}
+
 function last_field(s,   n, part) {
     # STAR's log is "  Number of input reads |\t12345"
     n = split(s, part, "\t")
@@ -84,9 +108,14 @@ BEGIN {
         bad = 1
         exit 2
     }
-    mapq += 0; excl += 0; incl += 0; minlen += 0; maxmm += 0; unmapped_n += 0
+    mapq += 0; excl += 0; incl += 0; minlen += 0; maxmm += 0
+    unmapped_n += 0; belowmapq_n += 0
     if (unmapped_n > 0 && unmapped_fq != "") fq_cmd = "gzip -c > \"" unmapped_fq "\""
     else unmapped_n = 0
+    if (belowmapq_n > 0 && belowmapq_fq != "") bmq_cmd = "gzip -c > \"" belowmapq_fq "\""
+    else belowmapq_n = 0
+    split("A T C G G C T A N N a t c g g c t a n n", pair, " ")
+    for (i = 1; i < 20; i += 2) comp[pair[i]] = pair[i + 1]
 }
 
 /^@/ { print; next }
@@ -111,7 +140,17 @@ BEGIN {
     primary++
     q = $5 + 0
     mapq_hist[q]++
-    if (q < mapq)                          { below_mapq++; next }
+    if (q < mapq) {
+        below_mapq++
+        if (bmq_sampled < belowmapq_n) {
+            if (int(flag / 16) % 2)
+                print "@" $1 "\n" revcomp($10) "\n+\n" reverse_str($11) | bmq_cmd
+            else
+                print "@" $1 "\n" $10 "\n+\n" $11 | bmq_cmd
+            bmq_sampled++
+        }
+        next
+    }
     if (excl > 0 && bits_any(flag, excl))  { filtered++;   next }
     if (incl > 0 && !bits_all(flag, incl)) { filtered++;   next }
     if (minlen > 0 && ref_len($6) < minlen) { filtered++;  next }
@@ -147,8 +186,14 @@ END {
     printf "MinAlignmentLength\t%s\n",   minlen        > out
     printf "MaxMismatch\t%s\n",          maxmm         > out
     printf "UnmappedSampled\t%.0f\n",    sampled       > out
+    printf "BelowMapqSampled\t%.0f\n",    bmq_sampled       > out
     for (q = 0; q <= 255; q++)
         if (q in mapq_hist) printf "MAPQ\t%d\t%.0f\n", q, mapq_hist[q] > out
     close(out)
-    if (unmapped_n > 0) close(fq_cmd)
+    # Close only what was actually opened. awk opens the pipe on first write, so closing
+    # an unused one leaves a truncated, unreadable .gz behind for a library that had no
+    # reads in that class; no file at all is the honest outcome, and aln.raw.txt already
+    # records the zero.
+    if (sampled > 0) close(fq_cmd)
+    if (bmq_sampled > 0) close(bmq_cmd)
 }
