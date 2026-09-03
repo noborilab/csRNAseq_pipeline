@@ -114,5 +114,7 @@ qc:
   organelle_chroms: ["Pt", "Mt"]
   mirnas: "/Users/gok24jef/csRNAseq/data/Araport11_miRNA.bed"
   trnas: "/Users/gok24jef/csRNAseq/data/Araport11_pre-tRNA.bed"
+  # Stranded BED of snRNA loci, for the snRNA5pPct / tRNA5pPct precision pair.
+  snrnas: ""
   min_cs_frip: 0.9
   min_pct_nuclear: 90

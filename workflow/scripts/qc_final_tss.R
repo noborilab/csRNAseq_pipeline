@@ -177,6 +177,27 @@ repl_cor_initial <- suppressWarnings(suppressMessages(
 repl_cor_combined <- rbind(repl_cor_initial, repl_cor_final)
 readr::write_tsv(repl_cor_combined, snakemake@output[["repl_cor"]])
 
+# ── 5'-end precision at snRNA and tRNA genes ───────────────────────────────
+#
+# Written per sample by rule qc_five_prime, which reads the raw bedGraphs. Merged
+# here so both live in one table. Columns are NA when neither qc/snrnas nor
+# qc/trnas is configured.
+#
+# snRNAs are capped Pol II transcripts, so their signal should sit on the
+# annotated 5' end; tRNA 5' ends carry a monophosphate from RNase P and become
+# ligation-competent when the phosphatase step fails. The two therefore move in
+# opposite directions on a phosphatase problem, and together on a mapping or
+# annotation problem, which is what makes the pair diagnostic where either alone
+# is not. Unlike PhosEfficiency this needs no matched input library.
+five_files <- trimws(snakemake@input[["five_prime"]])
+if (length(five_files)) {
+    five <- do.call(rbind, lapply(five_files, function(f)
+        as.data.frame(suppressWarnings(suppressMessages(readr::read_tsv(f, progress = FALSE))))))
+    i <- match(stats_cs[["Sample"]], five[["Sample"]])
+    stats_cs[["snRNA5pPct"]] <- round(five[["snRNA5pPct"]][i], 1)
+    stats_cs[["tRNA5pPct"]]  <- round(five[["tRNA5pPct"]][i], 1)
+}
+
 # ── Optional: miRNA and pre-tRNA contamination metrics ──────────────────────
 
 tss_in    <- import(trimws(snakemake@input[["tss_in"]]))

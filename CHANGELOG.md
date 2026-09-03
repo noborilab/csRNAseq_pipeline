@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-03
+
+### Added
+- `qc/snrnas`, a path to a stranded BED of snRNA loci, and two columns in
+  `qc_final_cs.txt`: `snRNA5pPct` and `tRNA5pPct`, the share of signal within 500 bp
+  of an annotated 5' end that sits within 5 bp of it. Computed per library by the new
+  `qc_five_prime` rule, which reads the raw bedGraphs, whose coordinates are already
+  read 5' ends.
+
+  Sm-class snRNAs are capped Pol II transcripts, so a working library puts almost all
+  of their signal on the 5' end, while tRNA 5' ends carry a monophosphate from RNase P
+  and become ligation-competent as soon as the phosphatase step fails.
+
+  `snRNA5pPct` is the one to gate on. On the enzyme panel it separates the two groups
+  without overlap: worst library with the phosphatase 92.4, best without it 88.9, a gap
+  of 4.5 SD. `tRNA5pPct` does not separate on its own, spanning 30.3 to 65.9 among
+  libraries that have the phosphatase, because it only moves in the most extreme arm;
+  it is reported because it is free and says which chemistry failed, not because it
+  gates. Combining the two into a ratio or a difference was tested and is worse than
+  `snRNA5pPct` alone: both lose the clean split, because the tRNA noise swamps the
+  snRNA signal.
+
+  Both are ratios computed inside one library against its own neighbourhood, so
+  unlike `PhosEfficiency` they need no matched input and no normalisation, and work on
+  a sample that has none. `qc/trnas` is reused for the tRNA half; it now wants a strand
+  column, and a BED without one is skipped with a warning rather than scored wrongly.
+  Off by default: leave `qc/snrnas` blank and only `tRNA5pPct` is computed.
+
 ## [0.10.1] - 2026-08-27
 
 ### Added

@@ -530,7 +530,20 @@ properties:
         default: ""
         description: >
           Path to a BED file of pre-tRNA loci. Used to calculate the
-          phosphorylation efficiency metric. Leave blank to skip.
+          phosphorylation efficiency metric, and, with a strand column, the
+          tRNA5pPct 5'-end precision metric. Leave blank to skip.
+      snrnas:
+        type: string
+        default: ""
+        description: >
+          Path to a stranded BED file of snRNA loci. Used to calculate
+          snRNA5pPct, the share of nearby signal sitting on the annotated 5'
+          end. Sm-class snRNAs are capped Pol II transcripts, so a working
+          library puts nearly all of their signal there; the value falls when
+          the phosphatase step lets 5'-monophosphate species into the library.
+          Read alongside tRNA5pPct, which moves the opposite way for the same
+          reason. Unlike PhosEfficiency neither needs a matched input library.
+          Leave blank to skip.
       min_cs_frip:
         type: number
         default: 0.9

@@ -1163,6 +1163,25 @@ rule run_info:
         os.unlink(dump)
 
 
+rule qc_five_prime:
+    message:
+        "Measuring 5'-end precision for {wildcards.sample_cs}"
+    input:
+        bg_p=OUTPUT_DIR + "/bedgraph/{sample_cs}.raw.pos.bedGraph.gz",
+        bg_n=OUTPUT_DIR + "/bedgraph/{sample_cs}.raw.neg.bedGraph.gz",
+    output:
+        OUTPUT_DIR + "/qc/{sample_cs}.five_prime.txt",
+    benchmark:
+        OUTPUT_DIR + "/qc/{sample_cs}.qc_five_prime.benchmark.txt",
+    resources:
+        mem_mb=3000,
+    params:
+        snrnas=config.get("qc", {}).get("snrnas") or "",
+        trnas=config.get("qc", {}).get("trnas") or "",
+    script:
+        "scripts/qc_five_prime.R"
+
+
 rule qc_final_tss:
     message:
         "Computing QC metrics on filtered TSS set"
@@ -1182,6 +1201,10 @@ rule qc_final_tss:
             (OUTPUT_DIR + "/tss/") + s + ".stats.txt" for s in sampletab["id"]
         ),
         repl_cor_initial=INTERMEDIATE_DIR + "/qc/replicate_correlation_initial.txt",
+        five_prime=list(
+            (OUTPUT_DIR + "/qc/") + s + ".five_prime.txt"
+            for s in sampletab["id"][sampletab["sample_type"] == "csrna"]
+        ),
     output:
         qc_cs=OUTPUT_DIR + "/qc_final_cs.txt",
         qc_in=OUTPUT_DIR + "/qc_final_in.txt",
@@ -1198,6 +1221,7 @@ rule qc_final_tss:
         ),
         mirnas=config.get("qc", {}).get("mirnas") or "",
         trnas=config.get("qc", {}).get("trnas") or "",
+        snrnas=config.get("qc", {}).get("snrnas") or "",
         min_cs_frip=MIN_CS_FRIP_FINAL,
         min_pct_nuclear=MIN_PCT_NUCLEAR_FINAL,
         # Not a final-specific gate: the threshold HOMER chose is a property of the
