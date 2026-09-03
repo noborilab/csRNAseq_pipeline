@@ -449,6 +449,10 @@ The `qc_initial_cs.txt` / `qc_initial_in.txt` tables contain the columns below. 
 | `AlignedReads` | Reads with a primary alignment, counted before filtering. `TrimmedReads` minus this is the reads that never aligned. |
 | `BelowMapqReads` | Aligned reads discarded by `filtering / alignment_mapq`, which in practice means multi-mappers. |
 | `FilteredOutReads` | Aligned reads that cleared MAPQ and were then discarded by `exclude_flags`, `include_flags`, `min_alignment_length` or `max_mismatch`. |
+| `MedianReadLength` | Median length of the reads that survived into the tag directory, from HOMER's own length histogram. Describes the filtered library, not the trimmer's output. |
+| `ModeReadLength` | Commonest read length in the same histogram, smaller length winning a tie. Read it alongside the median rather than on its own: a single processed population (24 nt siRNAs, say) can take the mode while leaving the median where the real initiation signal sits, and that gap is the point of reporting both. |
+| `snRNA5pPct` | Share of the signal within 500 bp of an annotated snRNA 5′ end that sits within 5 bp of it (requires `qc / snrnas`, which must be stranded). Sm-class snRNAs are capped Pol II transcripts, so a working library puts nearly all of it on the 5′ end. On the enzyme panel every library with alkaline phosphatase scored 92.4 or better and every library without it 88.9 or worse. Unlike `PhosEfficiency` it needs no matched input library. |
+| `tRNA5pPct` | The same measurement at mature tRNA 5′ ends (requires `qc / trnas`, stranded). RNase P leaves a 5′-monophosphate there, which becomes ligation-competent when the phosphatase step fails, so this moves opposite to `snRNA5pPct`. It does not separate good libraries from bad ones on its own and is reported as a cross-check on which chemistry failed, not as a gate. |
 | `csFRiP` | Fraction of nuclear reads falling in csRNA-called TSSs. Should be > 0.9 for a good csRNA library. |
 | `sFRiP` | Fraction of nuclear reads in input-called (small RNA) TSSs. |
 | `PctNuclear` | Percentage of reads mapping to nuclear chromosomes (i.e. excluding `qc / organelle_chroms`). |
@@ -468,7 +472,6 @@ The `qc_initial_cs.txt` / `qc_initial_in.txt` tables contain the columns below. 
 | `MinReplCorrPearson` | Same as above but Pearson correlation on log1p-transformed counts. |
 | `Status` | `Ok` or `FAIL`, from the gates listed under `StatusReason`. A gate that cannot be evaluated (an `NA` csFRiP, say) counts as a failure rather than as a pass. csRNA samples only. |
 | `StatusReason` | Comma-separated list of the gates that tripped, empty when `Status` is `Ok`. This is what makes a FAIL actionable without re-deriving every gate by hand. |
-| `StatusBasis` | `initial` in `qc_initial_cs.txt` and `final-advisory` in `qc_final_cs.txt`. `collect_consensus_tss` reads the **initial** `Status` and nothing reads the final one, so a FAIL in the final table has already had no effect on the TSS set that table describes. |
 
 ### Reading these numbers, and what they do not mean
 
@@ -512,5 +515,6 @@ comparisons on those.
 **Only the initial `Status` acts on anything.** `collect_consensus_tss` reads
 `qc_initial_cs.txt`, so that is the table whose gates (`qc / min_cs_frip`,
 `qc / min_pct_nuclear`) can change a run, and `filtering / exclude_failed_from_consensus`
-is what makes them do so. The final table's `Status` is advice, labelled as such in
-`StatusBasis`, and it has its own gates because it measures a different thing.
+is what makes them do so. The final table's `Status` is advice, and it has its own
+gates because it measures a different thing. Nothing reads it, so a FAIL there has
+already had no effect on the TSS set that table describes.

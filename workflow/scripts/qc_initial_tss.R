@@ -228,12 +228,10 @@ status <- qc_status(list(
     # is also what this gate falls back to.
     Log2FoldThreshold = stats_cs[['Log2FoldThreshold']] >= MIN_LOG2_FOLD
 ))
+# This is the Status that acts: collect_consensus_tss reads this table, not the final
+# one, so a FAIL here can change the TSS set when exclude_failed_from_consensus is on.
 stats_cs[['Status']] <- status[['Status']]
 stats_cs[['StatusReason']] <- status[['StatusReason']]
-# Which of the two QC tables this Status came from. collect_consensus_tss consumes the
-# initial one and nothing consumes the final one, so the distinction decides whether a
-# FAIL changed the run or is only advice.
-stats_cs[['StatusBasis']] <- 'initial'
 
 readr::write_tsv(stats_cs, OUT_CS)
 readr::write_tsv(stats_in, OUT_IN)

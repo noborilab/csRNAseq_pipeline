@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-printf "Sample\tRawReads\tTrimmedReads\tAlignedReads\tBelowMapqReads\tFilteredOutReads\tTotalReads\tOrganelleReads\tFreq1A\tPosReads\tNegReads\n" > "$OUT"
+printf "Sample\tRawReads\tTrimmedReads\tAlignedReads\tBelowMapqReads\tFilteredOutReads\tTotalReads\tMedianReadLength\tModeReadLength\tOrganelleReads\tFreq1A\tPosReads\tNegReads\n" > "$OUT"
 for i in "$@"; do
     if [[ ! -f "$OUT_PREFIX/$i/tagInfo.txt" ]]; then
         echo "ERROR: tagInfo.txt not found for sample $i (${OUT_PREFIX}/${i}/tagInfo.txt)" >&2
@@ -34,6 +34,30 @@ for i in "$@"; do
         printf "\t" >> "$OUT"
     done
     grep "^genome=" "$OUT_PREFIX/$i/tagInfo.txt" | cut -f3 | tr -d '\n' >> "$OUT"
+    printf "\t" >> "$OUT"
+    # Read-length summary from HOMER's own length histogram, which is built from the
+    # filtered BAM, so these describe the reads that survived into the tagdir rather
+    # than everything the trimmer emitted. The average HOMER prints in the header is
+    # pulled toward the tail by a handful of long reads; the median and the mode say
+    # where the library actually sits, and the two separating is itself informative.
+    lendist="$OUT_PREFIX/$i/tagLengthDistribution.txt"
+    if [[ -f "$lendist" ]]; then
+        awk -F'\t' '
+            $1 ~ /^[0-9]+$/ { n++; len[n] = $1 + 0; frac[n] = $2 + 0; total += $2 + 0 }
+            END {
+                if (n == 0 || total <= 0) { printf "NA\tNA"; exit }
+                med = "NA"; mode = "NA"; best = -1; cum = 0
+                for (k = 1; k <= n; k++) {
+                    cum += frac[k]
+                    if (med == "NA" && cum >= total / 2) med = len[k]
+                    # > rather than >=, so a tie keeps the shorter length
+                    if (frac[k] > best) { best = frac[k]; mode = len[k] }
+                }
+                printf "%s\t%s", med, mode
+            }' "$lendist" >> "$OUT"
+    else
+        printf "NA\tNA" >> "$OUT"
+    fi
     printf "\t" >> "$OUT"
     # Summed and rounded inside awk, not in the shell: HOMER writes tag counts as floats,
     # and a fractional total (multi-mapper weighting, bam2td -keepAll) comes back from awk

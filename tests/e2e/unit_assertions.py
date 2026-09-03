@@ -156,24 +156,20 @@ QC_FIXTURE_THRESHOLDS = {
 }
 
 
-def check_status(path: str, basis: str, expect_status: str = None,
+def check_status(path: str, expect_status: str = None,
                  expect_reason: str = None) -> None:
-    """Status, StatusReason and StatusBasis in one of the csRNA QC tables.
+    """Status and StatusReason in one of the csRNA QC tables.
 
-    StatusBasis is what says which table a Status came from, which is the difference
-    between a FAIL that changed the run (the initial table, which
-    collect_consensus_tss reads) and one that is only advice (the final table).
+    Which table a Status came from is what separates a FAIL that changed the run (the
+    initial table, which collect_consensus_tss reads) from one that is only advice (the
+    final table), so the caller passes the path and the expectation for that table.
     """
     with open(path) as fh:
         rows = list(csv.DictReader(fh, delimiter="\t"))
-    for col in ("Status", "StatusReason", "StatusBasis"):
+    for col in ("Status", "StatusReason"):
         if col not in rows[0]:
             fail(f"{os.path.basename(path)} missing column: {col}")
-    wrong_basis = [r["Sample"] for r in rows if r["StatusBasis"] != basis]
-    if wrong_basis:
-        fail(f"{os.path.basename(path)}: StatusBasis should be {basis!r} for "
-             f"{wrong_basis}")
-    ok(f"{os.path.basename(path)} has Status, StatusReason and StatusBasis={basis}")
+    ok(f"{os.path.basename(path)} has Status and StatusReason")
 
     # The threshold gate reads a file per library, so check the column made it across
     # before checking what it decided.
@@ -255,7 +251,7 @@ def assert_qc_initial(outdir: str, expect_status: str = None,
         fail("condB_csrna1 not found in qc_initial_cs.txt; shared-input pairing may be broken")
     ok("condB_csrna1 present in qc_initial_cs.txt (shared-input pairing works)")
 
-    check_status(qc_cs_path, "initial", expect_status, expect_reason)
+    check_status(qc_cs_path, expect_status, expect_reason)
 
 
 def assert_qc_final(outdir: str, expect_status: str = None,
@@ -307,7 +303,7 @@ def assert_qc_final(outdir: str, expect_status: str = None,
         fail(f"qc_final_in.txt has {n_in} rows, expected 2")
     ok(f"qc_final_cs.txt ({n_cs} rows) and qc_final_in.txt ({n_in} rows) correct")
 
-    check_status(qc_cs_path, "final-advisory", expect_status, expect_reason)
+    check_status(qc_cs_path, expect_status, expect_reason)
 
 
 def assert_size_composition(outdir: str, srna_enabled: bool, top_enabled: bool) -> None:

@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-03
+
+### Added
+- `MedianReadLength` and `ModeReadLength` in all four QC tables, for input libraries as
+  well as csRNA ones. Both come from HOMER's `tagLengthDistribution.txt`, so they
+  describe the reads that survived filtering into the tag directory rather than
+  everything the trimmer emitted, and they cost no extra pass over the data. The
+  average HOMER prints in that file's header is pulled toward the tail by a few long
+  reads; the median says where the library sits and the mode says whether one discrete
+  population dominates it. On the enzyme panel the mode lands on 24 in most libraries
+  while the median runs 29 to 36, which is the 24 nt siRNA population showing up
+  without displacing the initiation signal. `min_alignment_length` is 15, so that spike
+  is not a boundary artefact.
+- README rows for `snRNA5pPct` and `tRNA5pPct`, which 0.11.0 added to the tables
+  without documenting.
+
+### Removed
+- `StatusBasis`. It repeated one constant on every row of a table (`initial` or
+  `final-advisory`) to say which table you were reading, which the table's own filename
+  already says. The fact it was carrying, that `collect_consensus_tss` reads the initial
+  `Status` and nothing reads the final one, is now a comment beside each `Status`
+  assignment and a paragraph in the README, where it is not repeated 22 times per run.
+
+### Note
+- `tests/data/golden/qc_final_*.txt` do not match the current column set, and have not
+  since 0.11.0 added `snRNA5pPct` and `tRNA5pPct`. Refresh them with
+  `tests/scripts/update_golden.sh <e2e outdir>` on the next e2e run.
+
 ## [0.11.0] - 2026-09-03
 
 ### Added

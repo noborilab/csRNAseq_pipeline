@@ -31,25 +31,26 @@ PAIRED_IN_IDS = ["condA_input1", "condA_input2", "condA_input1"]
 # ── Statistics fixtures ─────────────────────────────────────────────────────────
 # Column order matches workflow/scripts/gather_stats.sh:
 #   Sample  RawReads  TrimmedReads  AlignedReads  BelowMapqReads  FilteredOutReads
-#   TotalReads  OrganelleReads  Freq1A  PosReads  NegReads
+#   TotalReads  MedianReadLength  ModeReadLength  OrganelleReads  Freq1A
+#   PosReads  NegReads
 # The three alignment columns are chosen so that they account for the whole loss:
 # AlignedReads - BelowMapqReads - FilteredOutReads == TotalReads, and
 # TrimmedReads >= AlignedReads.
 STATS_CS = [
-    ("condA_csrna1", 550, 510, 505, 3, 2, 500, 0, 0.80, 400, 100),
-    ("condA_csrna2", 530, 490, 486, 4, 2, 480, 0, 0.75, 360, 120),
-    ("condB_csrna1", 570, 530, 526, 4, 2, 520, 0, 0.82, 426,  94),
+    ("condA_csrna1", 550, 510, 505, 3, 2, 500, 32, 31, 0, 0.80, 400, 100),
+    ("condA_csrna2", 530, 490, 486, 4, 2, 480, 33, 24, 0, 0.75, 360, 120),
+    ("condB_csrna1", 570, 530, 526, 4, 2, 520, 30, 24, 0, 0.82, 426,  94),
 ]
 STATS_IN = [
-    ("condA_input1", 500, 460, 455, 3, 2, 450, 0, 0.50, 225, 225),
-    ("condA_input2", 510, 470, 465, 3, 2, 460, 0, 0.45, 207, 253),
+    ("condA_input1", 500, 460, 455, 3, 2, 450, 27, 24, 0, 0.50, 225, 225),
+    ("condA_input2", 510, 470, 465, 3, 2, 460, 28, 24, 0, 0.45, 207, 253),
 ]
 
 def write_stats(path, rows):
     with open(path, "w") as fh:
         fh.write("Sample\tRawReads\tTrimmedReads\tAlignedReads\tBelowMapqReads"
-                 "\tFilteredOutReads\tTotalReads\tOrganelleReads"
-                 "\tFreq1A\tPosReads\tNegReads\n")
+                 "\tFilteredOutReads\tTotalReads\tMedianReadLength\tModeReadLength"
+                 "\tOrganelleReads\tFreq1A\tPosReads\tNegReads\n")
         for r in rows:
             fh.write("\t".join(str(x) for x in r) + "\n")
 

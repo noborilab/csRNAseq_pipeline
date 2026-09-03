@@ -186,9 +186,10 @@ readr::write_tsv(repl_cor_combined, snakemake@output[["repl_cor"]])
 # snRNAs are capped Pol II transcripts, so their signal should sit on the
 # annotated 5' end; tRNA 5' ends carry a monophosphate from RNase P and become
 # ligation-competent when the phosphatase step fails. The two therefore move in
-# opposite directions on a phosphatase problem, and together on a mapping or
-# annotation problem, which is what makes the pair diagnostic where either alone
-# is not. Unlike PhosEfficiency this needs no matched input library.
+# opposite directions when the phosphatase step fails. snRNA5pPct is the one that
+# separates cleanly on its own; tRNA5pPct only moves in the most extreme arm and is
+# kept as a cross-check on which chemistry failed. Unlike PhosEfficiency neither
+# needs a matched input library.
 five_files <- trimws(snakemake@input[["five_prime"]])
 if (length(five_files)) {
     five <- do.call(rbind, lapply(five_files, function(f)
@@ -263,11 +264,10 @@ status <- qc_status(list(
     PctNuclear        = stats_cs[["PctNuclear"]] > MIN_PCT_NUCLEAR,
     Log2FoldThreshold = stats_cs[["Log2FoldThreshold"]] >= MIN_LOG2_FOLD
 ))
+# Advisory: collect_consensus_tss reads the initial Status, so a FAIL here has already
+# had no effect on the TSS set this table describes.
 stats_cs[["Status"]] <- status[["Status"]]
 stats_cs[["StatusReason"]] <- status[["StatusReason"]]
-# Advisory, and labelled as such: collect_consensus_tss reads the initial Status, so a
-# FAIL here has already had no effect on the TSS set this table describes.
-stats_cs[["StatusBasis"]] <- "final-advisory"
 
 readr::write_tsv(stats_cs, snakemake@output[["qc_cs"]])
 readr::write_tsv(stats_in, snakemake@output[["qc_in"]])
