@@ -37,9 +37,15 @@ for i in "$@"; do
     printf "\t" >> "$OUT"
     # Read-length summary from HOMER's own length histogram, which is built from the
     # filtered BAM, so these describe the reads that survived into the tagdir rather
-    # than everything the trimmer emitted. The average HOMER prints in the header is
-    # pulled toward the tail by a handful of long reads; the median and the mode say
-    # where the library actually sits, and the two separating is itself informative.
+    # than everything the trimmer emitted, and the average HOMER prints in that file's
+    # header is pulled toward the tail by a handful of long reads.
+    #
+    # The median is the stable number. Read the mode with care: a healthy csRNA library
+    # has a nearly flat distribution, top bin around 5 to 6 per cent, so which length
+    # wins flips between replicates of the same arm and means little on its own. It is
+    # worth having because a library with a real discrete population is not flat at all
+    # (22 per cent at 24 nt in an input library, 15 per cent at 30 nt in a phosphatase-
+    # free arm), and in those the mode lands where the population is.
     lendist="$OUT_PREFIX/$i/tagLengthDistribution.txt"
     if [[ -f "$lendist" ]]; then
         awk -F'\t' '

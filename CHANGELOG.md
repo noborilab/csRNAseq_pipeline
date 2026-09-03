@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-09-03
+
+### Changed
+- Corrected what 0.12.0 claimed about `ModeReadLength`. That entry said the mode landing
+  on 24 nt showed a 24 nt siRNA population sitting under the initiation signal. Checking
+  the underlying histograms does not support reading it that way. A healthy csRNA library
+  is nearly flat in length, the top bin holding 5 to 6 per cent, so the winning length
+  flips between replicates of the same arm (24 in one, 31 in the other) on differences
+  too small to mean anything. The column is still worth reporting, because a library with
+  a genuinely discrete population is not flat: an input library puts 22 per cent at 24 nt
+  and a phosphatase-free arm 15 per cent at 30 nt, and there the mode does land on the
+  population. What separates the two cases is the height of the top bin, which this column
+  does not carry. `MedianReadLength` is the stable summary of the two.
+
 ## [0.12.0] - 2026-09-03
 
 ### Added
@@ -15,11 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   describe the reads that survived filtering into the tag directory rather than
   everything the trimmer emitted, and they cost no extra pass over the data. The
   average HOMER prints in that file's header is pulled toward the tail by a few long
-  reads; the median says where the library sits and the mode says whether one discrete
-  population dominates it. On the enzyme panel the mode lands on 24 in most libraries
-  while the median runs 29 to 36, which is the 24 nt siRNA population showing up
-  without displacing the initiation signal. `min_alignment_length` is 15, so that spike
-  is not a boundary artefact.
+  reads. On the enzyme panel the median runs 24 to 36, input libraries sitting shorter
+  than the csRNA libraries drawn from the same RNA. See 0.12.1 for what the mode does
+  and does not support.
 - README rows for `snRNA5pPct` and `tRNA5pPct`, which 0.11.0 added to the tables
   without documenting.
 
