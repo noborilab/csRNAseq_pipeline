@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-09-04
+
+### Changed
+- Refreshed `tests/data/golden/qc_final_*.txt`, which 0.12.0 flagged as no longer
+  matching the column set. They now carry `MedianReadLength`, `ModeReadLength`,
+  `snRNA5pPct` and `tRNA5pPct`, and no longer carry `StatusBasis`. Every value in a
+  column the two copies share is unchanged, except `MinReplCorrPearson` in the last
+  bit of a double, which is far inside the comparison's tolerance, so this is a column
+  change and not a drift in any metric.
+
+### Note
+- `snRNA5pPct` and `tRNA5pPct` are NA for all three libraries in the refreshed golden
+  tables, because `qc/snrnas` is unset in the test config and no synthetic read lands
+  within 500 bp of the placeholder tRNA locus in `tests/data/trnas.bed`. The golden
+  comparison therefore pins the two columns' presence but not their arithmetic. Giving
+  them real values means putting signal at those loci, which would move `PretRNA`,
+  `PretRNAPct` and `PhosEfficiency` as well.
+
 ## [0.12.1] - 2026-09-03
 
 ### Changed
