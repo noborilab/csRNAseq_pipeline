@@ -32,27 +32,28 @@ PAIRED_IN_IDS = ["condA_input1", "condA_input2", "condA_input1"]
 # Column order matches workflow/scripts/gather_stats.sh:
 #   Sample  RawReads  TrimmedReads  AlignedReads  BelowMapqReads  FilteredOutReads
 #   TotalReads  P20ReadLength  MedianReadLength  P80ReadLength  ModeReadLength
-#   OrganelleReads  Freq1A  PosReads  NegReads
+#   ModeReadFraction  OrganelleReads  Freq1A  PosReads  NegReads
 # The three alignment columns are chosen so that they account for the whole loss:
 # AlignedReads - BelowMapqReads - FilteredOutReads == TotalReads, and
 # TrimmedReads >= AlignedReads.
-# The csRNA rows carry a wider gap between the median and P80 than the input rows,
-# which is the shape difference the columns exist to show.
+# The csRNA rows carry a flatter length distribution than the input rows, a lower
+# ModeReadFraction on a wider spread, which is the shape difference these columns exist
+# to show.
 STATS_CS = [
-    ("condA_csrna1", 550, 510, 505, 3, 2, 500, 25, 32, 42, 31, 0, 0.80, 400, 100),
-    ("condA_csrna2", 530, 490, 486, 4, 2, 480, 26, 33, 43, 24, 0, 0.75, 360, 120),
-    ("condB_csrna1", 570, 530, 526, 4, 2, 520, 24, 30, 40, 24, 0, 0.82, 426,  94),
+    ("condA_csrna1", 550, 510, 505, 3, 2, 500, 25, 32, 42, 31, 6.10, 0, 0.80, 400, 100),
+    ("condA_csrna2", 530, 490, 486, 4, 2, 480, 26, 33, 43, 24, 5.40, 0, 0.75, 360, 120),
+    ("condB_csrna1", 570, 530, 526, 4, 2, 520, 24, 30, 40, 24, 7.80, 0, 0.82, 426,  94),
 ]
 STATS_IN = [
-    ("condA_input1", 500, 460, 455, 3, 2, 450, 23, 27, 33, 24, 0, 0.50, 225, 225),
-    ("condA_input2", 510, 470, 465, 3, 2, 460, 24, 28, 34, 24, 0, 0.45, 207, 253),
+    ("condA_input1", 500, 460, 455, 3, 2, 450, 23, 27, 33, 24, 18.30, 0, 0.50, 225, 225),
+    ("condA_input2", 510, 470, 465, 3, 2, 460, 24, 28, 34, 24, 12.90, 0, 0.45, 207, 253),
 ]
 
 def write_stats(path, rows):
     with open(path, "w") as fh:
         fh.write("Sample\tRawReads\tTrimmedReads\tAlignedReads\tBelowMapqReads"
                  "\tFilteredOutReads\tTotalReads\tP20ReadLength\tMedianReadLength"
-                 "\tP80ReadLength\tModeReadLength"
+                 "\tP80ReadLength\tModeReadLength\tModeReadFraction"
                  "\tOrganelleReads\tFreq1A\tPosReads\tNegReads\n")
         for r in rows:
             fh.write("\t".join(str(x) for x in r) + "\n")

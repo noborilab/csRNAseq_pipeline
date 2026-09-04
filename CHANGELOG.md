@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-04
+
+### Added
+- `ModeReadFraction`, the percentage of reads sitting at `ModeReadLength`. Height of the
+  tallest bin rather than which bin it is, from the same histogram and the same pass.
+
+  This is the read-length column that carries information. Across the 34 protocol-
+  development libraries every passing csRNA library sat between 4.8 and 8.6, every
+  failing one between 9.9 and 15.5, and every input library between 10.9 and 26.1, with
+  no overlap between any of the three. A library made of one processed species
+  concentrates in a few lengths, and initiation spread over thousands of real promoters
+  does not, which is the same reasoning behind `filtering / tss_max_top_sizes_fraction`
+  applied to the library rather than to a cluster.
+
+  It is reported, not gated. On that panel it runs at r = -0.92 against `PctNuclear` and
+  -0.74 against `csFRiP`, so it mostly restates gates the table already has, and the
+  margin between the passing libraries and the rest is 1.3 percentage points on 22
+  csRNA libraries from one experiment.
+
+### Changed
+- Corrected the 0.13.0 claim for `P20ReadLength` and `P80ReadLength`. Measured on all 34
+  tag directories rather than the 8 in the cached table, neither the percentiles nor the
+  spread between them separates csRNA libraries from input libraries: P80 minus the
+  median runs 5 to 12 in the csRNA libraries and 5 to 10 in the inputs. What does hold is
+  the paired version, where a csRNA library carries the longer upper tail than its own
+  matched input in 11 of 12 pairs, by 1 to 4 nt. The columns stay, described as what they
+  are, which is a description of the distribution's shape rather than a test.
+
 ## [0.13.0] - 2026-09-04
 
 ### Added
@@ -16,17 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   The 80th percentile alone does not do the job, because size selection moves every
   percentile together: on the protocol-development panel a 40-70 nt input library and a
-  20-70 nt csRNA library both land on P80 = 39 while looking nothing alike. `P80` minus
-  the median does separate them. Across the four csRNA and four input libraries with a
-  cached length table it ran 9 to 12 in the csRNA libraries and 6 to 8 in the inputs
-  drawn from the same RNA, with no overlap, and the same holds for P80 minus P20 (16 to
-  21 against 10 to 15). A csRNA library carries the longer upper tail, which is what an
-  un-processed capped population looks like against a background of processed fragments.
+  20-70 nt csRNA library both land on P80 = 39 while looking nothing alike.
 
-  Those numbers come from 8 libraries in one experiment, and from a cached table of
-  trimmed read lengths rather than the tag-directory histogram these columns read, so
-  treat the ranges as indicative until they have been checked against a full run. The
-  columns themselves are unaffected either way.
+  This entry originally claimed that P80 minus the median separated csRNA libraries from
+  input libraries without overlap, on 8 libraries from a cached table. Checked against
+  all 34 tag directories it does not. See 0.14.0.
 
 ## [0.12.2] - 2026-09-04
 

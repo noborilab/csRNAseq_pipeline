@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-printf "Sample\tRawReads\tTrimmedReads\tAlignedReads\tBelowMapqReads\tFilteredOutReads\tTotalReads\tP20ReadLength\tMedianReadLength\tP80ReadLength\tModeReadLength\tOrganelleReads\tFreq1A\tPosReads\tNegReads\n" > "$OUT"
+printf "Sample\tRawReads\tTrimmedReads\tAlignedReads\tBelowMapqReads\tFilteredOutReads\tTotalReads\tP20ReadLength\tMedianReadLength\tP80ReadLength\tModeReadLength\tModeReadFraction\tOrganelleReads\tFreq1A\tPosReads\tNegReads\n" > "$OUT"
 for i in "$@"; do
     if [[ ! -f "$OUT_PREFIX/$i/tagInfo.txt" ]]; then
         echo "ERROR: tagInfo.txt not found for sample $i (${OUT_PREFIX}/${i}/tagInfo.txt)" >&2
@@ -40,19 +40,25 @@ for i in "$@"; do
     # than everything the trimmer emitted, and the average HOMER prints in that file's
     # header is pulled toward the tail by a handful of long reads.
     #
-    # The median is the stable number. Read the mode with care: a healthy csRNA library
-    # has a nearly flat distribution, top bin around 5 to 6 per cent, so which length
-    # wins flips between replicates of the same arm and means little on its own. It is
-    # worth having because a library with a real discrete population is not flat at all
-    # (22 per cent at 24 nt in an input library, 15 per cent at 30 nt in a phosphatase-
-    # free arm), and in those the mode lands where the population is.
+    # The median is the stable number, and ModeReadFraction is the informative one.
+    # ModeReadLength on its own says little: a healthy csRNA library is nearly flat in
+    # length, so which bin wins flips between replicates of the same arm on differences
+    # of a fraction of a per cent. How tall that bin is does separate. Across the
+    # protocol-development panel every passing csRNA library sat between 4.8 and 8.6 per
+    # cent, every failing one between 9.9 and 15.5, and every input library between 10.9
+    # and 26.1, with no overlap anywhere. A library made of one processed species
+    # concentrates; initiation spread over real promoters does not.
     #
-    # P20 and P80 are here so the shape can be read rather than just the centre. The
-    # useful quantity is the spread, not either percentile on its own: size selection
-    # moves all three together, so a 40-70 nt input and a 20-70 nt csRNA library can
-    # land on the same P80 while having quite different distributions. P80 minus the
-    # median is what says the library is top-heavy, and a csRNA library run beside its
-    # own input reliably carries the longer upper tail.
+    # This is not independent evidence. It runs at r = -0.92 against PctNuclear and
+    # -0.74 against csFRiP on that panel, so it is largely restating gates the table
+    # already has, and it is reported rather than gated on.
+    #
+    # P20 and P80 describe the rest of the shape. Neither separates library types on its
+    # own, and neither does the spread between them: size selection moves all three
+    # percentiles together, so a 40-70 nt input and a 20-70 nt csRNA library can share a
+    # P80 while looking nothing alike. Against its own matched input a csRNA library did
+    # carry the longer upper tail in 11 of 12 pairs, by 1 to 4 nt, which is a paired
+    # comparison and not a threshold.
     #
     # HOMER writes the histogram in ascending length order, which the single pass below
     # relies on for all three percentiles.
@@ -61,7 +67,7 @@ for i in "$@"; do
         awk -F'\t' '
             $1 ~ /^[0-9]+$/ { n++; len[n] = $1 + 0; frac[n] = $2 + 0; total += $2 + 0 }
             END {
-                if (n == 0 || total <= 0) { printf "NA\tNA\tNA\tNA"; exit }
+                if (n == 0 || total <= 0) { printf "NA\tNA\tNA\tNA\tNA"; exit }
                 p20 = "NA"; med = "NA"; p80 = "NA"; mode = "NA"; best = -1; cum = 0
                 for (k = 1; k <= n; k++) {
                     cum += frac[k]
@@ -71,10 +77,10 @@ for i in "$@"; do
                     # > rather than >=, so a tie keeps the shorter length
                     if (frac[k] > best) { best = frac[k]; mode = len[k] }
                 }
-                printf "%s\t%s\t%s\t%s", p20, med, p80, mode
+                printf "%s\t%s\t%s\t%s\t%.2f", p20, med, p80, mode, 100 * best / total
             }' "$lendist" >> "$OUT"
     else
-        printf "NA\tNA\tNA\tNA" >> "$OUT"
+        printf "NA\tNA\tNA\tNA\tNA" >> "$OUT"
     fi
     printf "\t" >> "$OUT"
     # Summed and rounded inside awk, not in the shell: HOMER writes tag counts as floats,
