@@ -141,6 +141,22 @@ if (!nrow(quant_m)) {
          "tss_max_srna_fraction).")
 }
 
+# Row order. annotatePeaks.pl emits the clusters in a different order on every run and
+# nothing above imposes one, so two runs on the same data produced count tables holding
+# the same numbers with their rows shuffled, while tss.final.bed agreed with neither
+# because it keeps the consensus BED's order all the way through. Ordering the counts by
+# that same BED, which is coordinate-sorted and reproducible, settles all three at once:
+# the tables come out byte-identical between runs, they read in genomic order beside the
+# BED, and MinReplCorrPearson stops drifting in the last bit of a double, which is what
+# cor() did when it added the same pairs up in a new order each run.
+ord <- match(mcols(tss)[["name"]], rownames(quant_m))
+if (anyNA(ord) || length(ord) != nrow(quant_m)) {
+    stop("the consensus BED and the count matrix disagree after filtering: ",
+         length(ord), " clusters in the BED against ", nrow(quant_m), " rows of counts. ",
+         "That is a bug in the filtering above rather than anything in the config.")
+}
+quant_m <- quant_m[ord, , drop = FALSE]
+
 export.bed(tss, snakemake@output[["bed"]])
 
 readr::write_tsv(as.data.frame(cbind(TSS = rownames(quant_m), quant_m)),

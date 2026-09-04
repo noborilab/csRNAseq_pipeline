@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-04
+
+### Changed
+- Refreshed `tests/data/golden/qc_final_*.txt` for the read-length columns 0.13.0 and
+  0.14.0 added, `P20ReadLength`, `P80ReadLength` and `ModeReadFraction`, which takes the
+  csRNA table to 44 columns and the input table to 32. Every value in a column shared
+  with the previous copy is unchanged, apart from `MinReplCorrPearson`, whose last-bit
+  drift the row-ordering fix below settles.
+
+### Fixed
+- Two runs of the pipeline on the same data now write the same bytes. Every table HOMER
+  produces was coming out in the order its threads happened to finish in, and nothing
+  downstream imposed one, so a rerun reshuffled the rows of results that were otherwise
+  identical. Sorted on the way out of the rule that makes each one, all on the same
+  coordinate key, by a new `workflow/scripts/sort_table.sh`:
+
+  | Table | Rule |
+  |-------|------|
+  | `tss/{sample}.tss.txt`, `tss/{sample}.alltss.txt` | `find_tss_initial` |
+  | `bed/{sample}.tss.bed` | `find_tss_initial`, inherited through `pos2bed.pl` |
+  | `tss_merged/all_cs.tss_merged_quant_{cs,in}.txt` | `quantify_initial_cs_tss` |
+  | `tss_merged/all_in.tss_merged_quant_{cs,in}.txt` | `quantify_initial_in_tss` |
+  | `tss.consensus.homer.raw.txt` | `quantify_final_tss` |
+  | `tss.final.in.raw.txt` | `quantify_final_in_tss` |
+  | `tss.final.raw.txt`, `tss.final.cpm.txt` | `normalize_tss_quantification`, ordered by `tss.final.bed` |
+
+  Nothing read any of these positionally, so no result ever depended on the order, but two
+  things followed from it. The count tables disagreed with `tss.final.bed`, which keeps the
+  consensus BED's order throughout, and `cor()` added the same pairs up in a different
+  order on every run, which moved both the `Initial` and the `Final` Pearson correlation
+  in the last bit of a double. That is what has been quietly changing
+  `MinReplCorrPearson` on every golden refresh for three releases. It is now stable at
+  0.5273890876768268, and `MinReplCorrSpearman` never moved because rank sums are exact.
+
+  `sort` runs under `LC_ALL=C` with a tab separator, so the order does not follow the
+  machine's locale and lines up with the columns being named rather than with whitespace.
+
+- `makeUCSCfile` was picking a random RGB triple for each raw bedGraph's `track` line, so
+  all ten bedGraphs differed between runs on that one line while their 247 data lines were
+  identical. The rule now passes `-color`, blue for the forward strand and red for the
+  reverse.
+
+### Note
+- What is left is timing and provenance rather than results. Two runs into the same output
+  directory now agree on 190 of 250 files, and the rest are the 46 `*.benchmark.txt`
+  wall-clock records, 11 tool logs, `run_info.txt`, which is meant to be unique per run,
+  and the three csRNA `tss/*.stats.txt`, which differ only on HOMER's own
+  `Random number used:` line. That line is left as HOMER writes it. Run into a different
+  directory and a further 29 files differ only where a tool records its own command line,
+  absolute paths included.
+
 ## [0.14.0] - 2026-09-04
 
 ### Added

@@ -419,8 +419,8 @@ All outputs land in `files / output_dir` (default: `results/`):
 | `tss.consensus.sizes.txt` | Per csRNA library and cluster: total reads (`.reads`), reads in `tss_srna_sizes` (`.srna`), and reads in the cluster's 1..`tss_top_sizes_max` commonest lengths (`.top1` … `.topN`). All n are precomputed so `tss_top_sizes_n` can be retuned without re-reading the tag directories. Cluster names only when both size filters are off. |
 | `run_info.txt` | Provenance for the run: pipeline version and commit, host, tool versions, sample-table checksum and the fully resolved config. |
 | `tss.final.bed` | Filtered consensus TSS coordinates (BED6). With default `tss_min_cpm: 0` and `tss_srna_sizes: []` this equals `tss.consensus.bed`. |
-| `tss.final.raw.txt` | Raw tag counts per TSS per csRNA sample (filtered set only). |
-| `tss.final.cpm.txt` | TMM-normalized CPM counts. |
+| `tss.final.raw.txt` | Raw tag counts per TSS per csRNA sample (filtered set only). Rows follow `tss.final.bed`, so they are in coordinate order and identical between runs on the same data. |
+| `tss.final.cpm.txt` | TMM-normalized CPM counts, in the same row order. |
 | `norm_factors.txt` | edgeR TMM normalization factors and RPM multipliers. |
 | `bw/{sample}.rpm.pos.bw` | Forward-strand RPM-normalized bigWig. |
 | `bw/{sample}.rpm.neg.bw` | Reverse-strand RPM-normalized bigWig (scores are negative). |
@@ -438,6 +438,27 @@ All outputs land in `files / output_dir` (default: `results/`):
 | `qc/{sample}.unmapped.sample.fastq.gz` | The first N reads that never aligned, only when `program / keep_unmapped_sample` is above zero. |
 | `qc/{sample}.belowmapq.sample.fastq.gz` | The first N reads that aligned but fell below `filtering / alignment_mapq`, which with bwa means multi-mappers. Only when `program / keep_below_mapq_sample` is above zero. Written as sequenced, so reverse-strand alignments are reverse-complemented back. |
 | `qc/{sample}.aligner.log` | Aligner stderr (bwa/STAR/bowtie2/hisat2). For STAR, `Log.final.out` is appended to it. |
+
+### Reproducibility
+
+Two runs on the same data write the same bytes. Everything HOMER produces is sorted on a
+coordinate key on the way out of the rule that makes it, because `annotatePeaks.pl` and
+`findcsRNATSS.pl` both emit rows in the order their threads finish, and `makeUCSCfile`
+gets an explicit `-color` because it picks a random one otherwise. This is worth having
+for its own sake, and it also stopped the reported Pearson replicate correlation drifting
+in the last bit of a double from run to run, which is what `cor()` does when it adds the
+same pairs up in a different order.
+
+Four things still differ between two runs, none of them a result:
+
+- `*.benchmark.txt`, which record wall-clock time.
+- The tool logs.
+- `run_info.txt`, which is provenance and is meant to be unique per run.
+- `tss/{sample}.stats.txt`, on one line: HOMER records the random draw it used for its own
+  temporary filenames, and that is left as HOMER writes it.
+
+Run into a different output directory and a further set of files differ only where a tool
+records its own command line, which embeds absolute paths.
 
 ## QC Metrics
 

@@ -686,6 +686,18 @@ rule find_tss_initial:
                     {output.stats} > {output.stats}.tmp \
                     && mv {output.stats}.tmp {output.stats}
             fi
+            # findcsRNATSS is threaded as well, so its tables come out in a different row
+            # order on every run. Sorted here, before pos2bed reads tss.txt, so the BED
+            # inherits the order instead of needing a pass of its own. alltss.txt is not a
+            # declared output and is sorted for the same reason anyway: nothing a run
+            # writes should differ between two runs on the same data.
+            for f in {output.tss} {params.prefix}.alltss.txt; do
+                if [[ -s "$f" ]]; then
+                    bash {workflow.basedir}/scripts/sort_table.sh "$f" \
+                        -k2,2 -k3,3n -k4,4n -k5,5 -k1,1 > "$f.sorted"
+                    mv "$f.sorted" "$f"
+                fi
+            done
             if [[ -f {output.tss} ]]; then
                 pos2bed.pl -o {output.bed} {output.tss} 2>> {log}
             else
@@ -716,9 +728,16 @@ rule make_raw_bedgraph:
         pos=OUTPUT_DIR + "/bedgraph/{sample}.raw.pos.bedGraph",
         neg=OUTPUT_DIR + "/bedgraph/{sample}.raw.neg.bedGraph",
     shell:
+        # -color, because makeUCSCfile picks a random rgb triple for the track line
+        # otherwise, and that one line was the only thing that differed between two runs
+        # of this rule on the same data. Blue for the forward strand and red for the
+        # reverse is the usual reading of a stranded pair; the value carries no meaning
+        # beyond how the track draws in a browser.
         """
-            makeUCSCfile {input} -style tss -strand + -raw -o {params.pos} > {log} 2>&1
-            makeUCSCfile {input} -style tss -strand - -raw -o {params.neg} >> {log} 2>&1
+            makeUCSCfile {input} -style tss -strand + -raw -color 0,102,204 \
+                -o {params.pos} > {log} 2>&1
+            makeUCSCfile {input} -style tss -strand - -raw -color 204,51,0 \
+                -o {params.neg} >> {log} 2>&1
         """
 
 
@@ -850,13 +869,21 @@ rule quantify_initial_cs_tss:
     params:
         genome=config["program"]["homer"]["genome"],
     shell:
+        # Sorted on the way out: annotatePeaks emits its rows in the order its threads
+        # finish, so these tables came out shuffled between two runs on the same data,
+        # which is what moved the Initial replicate correlation in the last bit of a
+        # double. Coordinate order also matches all_*.tss_merged.bed, which bedtools
+        # already sorts.
         """
             annotatePeaks.pl {input.tss} {params.genome} \
                 -strand + -fragLength 1 -raw -d {input.cs} \
-                > {output.cs} 2> {log}
+                > {output.cs}.homer 2> {log}
+            bash {workflow.basedir}/scripts/sort_table.sh {output.cs}.homer -k2,2 -k3,3n -k4,4n -k5,5 -k1,1 > {output.cs}
             annotatePeaks.pl {input.tss} {params.genome} \
                 -strand + -fragLength 1 -raw -d {input.inp} \
-                > {output.inp} 2>> {log}
+                > {output.inp}.homer 2>> {log}
+            bash {workflow.basedir}/scripts/sort_table.sh {output.inp}.homer -k2,2 -k3,3n -k4,4n -k5,5 -k1,1 > {output.inp}
+            rm -f {output.cs}.homer {output.inp}.homer
         """
 
 
@@ -887,13 +914,21 @@ rule quantify_initial_in_tss:
     params:
         genome=config["program"]["homer"]["genome"],
     shell:
+        # Sorted on the way out: annotatePeaks emits its rows in the order its threads
+        # finish, so these tables came out shuffled between two runs on the same data,
+        # which is what moved the Initial replicate correlation in the last bit of a
+        # double. Coordinate order also matches all_*.tss_merged.bed, which bedtools
+        # already sorts.
         """
             annotatePeaks.pl {input.tss} {params.genome} \
                 -strand + -fragLength 1 -raw -d {input.cs} \
-                > {output.cs} 2> {log}
+                > {output.cs}.homer 2> {log}
+            bash {workflow.basedir}/scripts/sort_table.sh {output.cs}.homer -k2,2 -k3,3n -k4,4n -k5,5 -k1,1 > {output.cs}
             annotatePeaks.pl {input.tss} {params.genome} \
                 -strand + -fragLength 1 -raw -d {input.inp} \
-                > {output.inp} 2>> {log}
+                > {output.inp}.homer 2>> {log}
+            bash {workflow.basedir}/scripts/sort_table.sh {output.inp}.homer -k2,2 -k3,3n -k4,4n -k5,5 -k1,1 > {output.inp}
+            rm -f {output.cs}.homer {output.inp}.homer
         """
 
 
@@ -992,10 +1027,15 @@ rule quantify_final_tss:
     params:
         genome=config["program"]["homer"]["genome"],
     shell:
+        # Sorted for the same reason as the initial quantification, and into the same
+        # order normalize_tss_quantification.R puts its own outputs in, so this table and
+        # tss.final.raw.txt can be read side by side.
         """
             annotatePeaks.pl {input.tss} {params.genome} \
                 -strand + -fragLength 1 -raw -d {input.td} \
-                > {output} 2> {log}
+                > {output}.homer 2> {log}
+            bash {workflow.basedir}/scripts/sort_table.sh {output}.homer -k2,2 -k3,3n -k4,4n -k5,5 -k1,1 > {output}
+            rm -f {output}.homer
         """
 
 
@@ -1124,10 +1164,14 @@ rule quantify_final_in_tss:
     params:
         genome=config["program"]["homer"]["genome"],
     shell:
+        # Sorted like every other annotatePeaks table here, which also puts it in the
+        # same order as tss.final.raw.txt and tss.final.bed.
         """
             annotatePeaks.pl {input.tss} {params.genome} \
                 -strand + -fragLength 1 -raw -d {input.td} \
-                > {output} 2> {log}
+                > {output}.homer 2> {log}
+            bash {workflow.basedir}/scripts/sort_table.sh {output}.homer -k2,2 -k3,3n -k4,4n -k5,5 -k1,1 > {output}
+            rm -f {output}.homer
         """
 
 
