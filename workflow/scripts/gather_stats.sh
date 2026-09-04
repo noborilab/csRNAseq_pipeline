@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-printf "Sample\tRawReads\tTrimmedReads\tAlignedReads\tBelowMapqReads\tFilteredOutReads\tTotalReads\tMedianReadLength\tModeReadLength\tOrganelleReads\tFreq1A\tPosReads\tNegReads\n" > "$OUT"
+printf "Sample\tRawReads\tTrimmedReads\tAlignedReads\tBelowMapqReads\tFilteredOutReads\tTotalReads\tP20ReadLength\tMedianReadLength\tP80ReadLength\tModeReadLength\tOrganelleReads\tFreq1A\tPosReads\tNegReads\n" > "$OUT"
 for i in "$@"; do
     if [[ ! -f "$OUT_PREFIX/$i/tagInfo.txt" ]]; then
         echo "ERROR: tagInfo.txt not found for sample $i (${OUT_PREFIX}/${i}/tagInfo.txt)" >&2
@@ -46,23 +46,35 @@ for i in "$@"; do
     # worth having because a library with a real discrete population is not flat at all
     # (22 per cent at 24 nt in an input library, 15 per cent at 30 nt in a phosphatase-
     # free arm), and in those the mode lands where the population is.
+    #
+    # P20 and P80 are here so the shape can be read rather than just the centre. The
+    # useful quantity is the spread, not either percentile on its own: size selection
+    # moves all three together, so a 40-70 nt input and a 20-70 nt csRNA library can
+    # land on the same P80 while having quite different distributions. P80 minus the
+    # median is what says the library is top-heavy, and a csRNA library run beside its
+    # own input reliably carries the longer upper tail.
+    #
+    # HOMER writes the histogram in ascending length order, which the single pass below
+    # relies on for all three percentiles.
     lendist="$OUT_PREFIX/$i/tagLengthDistribution.txt"
     if [[ -f "$lendist" ]]; then
         awk -F'\t' '
             $1 ~ /^[0-9]+$/ { n++; len[n] = $1 + 0; frac[n] = $2 + 0; total += $2 + 0 }
             END {
-                if (n == 0 || total <= 0) { printf "NA\tNA"; exit }
-                med = "NA"; mode = "NA"; best = -1; cum = 0
+                if (n == 0 || total <= 0) { printf "NA\tNA\tNA\tNA"; exit }
+                p20 = "NA"; med = "NA"; p80 = "NA"; mode = "NA"; best = -1; cum = 0
                 for (k = 1; k <= n; k++) {
                     cum += frac[k]
-                    if (med == "NA" && cum >= total / 2) med = len[k]
+                    if (p20 == "NA" && cum >= 0.2 * total) p20 = len[k]
+                    if (med == "NA" && cum >= 0.5 * total) med = len[k]
+                    if (p80 == "NA" && cum >= 0.8 * total) p80 = len[k]
                     # > rather than >=, so a tie keeps the shorter length
                     if (frac[k] > best) { best = frac[k]; mode = len[k] }
                 }
-                printf "%s\t%s", med, mode
+                printf "%s\t%s\t%s\t%s", p20, med, p80, mode
             }' "$lendist" >> "$OUT"
     else
-        printf "NA\tNA" >> "$OUT"
+        printf "NA\tNA\tNA\tNA" >> "$OUT"
     fi
     printf "\t" >> "$OUT"
     # Summed and rounded inside awk, not in the shell: HOMER writes tag counts as floats,

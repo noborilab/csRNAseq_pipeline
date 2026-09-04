@@ -1,4 +1,4 @@
-Sample	RawReads	TrimmedReads	AlignedReads	BelowMapqReads	FilteredOutReads	TotalReads	MedianReadLength	ModeReadLength	OrganelleReads	Freq1A	PosReads	NegReads
-condA_csrna1	550	510	505	3	2	500	32	31	0	0.8	400	100
-condA_csrna2	530	490	486	4	2	480	33	24	0	0.75	360	120
-condB_csrna1	570	530	526	4	2	520	30	24	0	0.82	426	94
+Sample	RawReads	TrimmedReads	AlignedReads	BelowMapqReads	FilteredOutReads	TotalReads	P20ReadLength	MedianReadLength	P80ReadLength	ModeReadLength	OrganelleReads	Freq1A	PosReads	NegReads
+condA_csrna1	550	510	505	3	2	500	25	32	42	31	0	0.8	400	100
+condA_csrna2	530	490	486	4	2	480	26	33	43	24	0	0.75	360	120
+condB_csrna1	570	530	526	4	2	520	24	30	40	24	0	0.82	426	94
