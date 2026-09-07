@@ -1226,6 +1226,26 @@ rule qc_five_prime:
         "scripts/qc_five_prime.R"
 
 
+rule qc_complexity:
+    message:
+        "Measuring library complexity for {wildcards.sample_cs}"
+    input:
+        tagdir=OUTPUT_DIR + "/tagdir/{sample_cs}",
+        tss=OUTPUT_DIR + "/tss.final.bed",
+    output:
+        OUTPUT_DIR + "/qc/{sample_cs}.complexity.txt",
+    benchmark:
+        OUTPUT_DIR + "/qc/{sample_cs}.qc_complexity.benchmark.txt",
+    resources:
+        # A tag directory is an order of magnitude larger than the bedGraphs the
+        # other per-sample QC rules read, and the fragment table is held in memory.
+        mem_mb=6000,
+    params:
+        organelle_chroms=" ".join(config.get("qc", {}).get("organelle_chroms", ["Pt", "Mt"])),
+    script:
+        "scripts/qc_complexity.R"
+
+
 rule qc_final_tss:
     message:
         "Computing QC metrics on filtered TSS set"
@@ -1247,6 +1267,10 @@ rule qc_final_tss:
         repl_cor_initial=INTERMEDIATE_DIR + "/qc/replicate_correlation_initial.txt",
         five_prime=list(
             (OUTPUT_DIR + "/qc/") + s + ".five_prime.txt"
+            for s in sampletab["id"][sampletab["sample_type"] == "csrna"]
+        ),
+        complexity=list(
+            (OUTPUT_DIR + "/qc/") + s + ".complexity.txt"
             for s in sampletab["id"][sampletab["sample_type"] == "csrna"]
         ),
     output:

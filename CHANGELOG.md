@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-07
+
+### Added
+- `TSSDistinctFrag`, `TSSChao1` and `TSSSaturation` in `qc_final_cs.txt`, from a new
+  per-library `qc_complexity` rule. The QC table has had no measure of library
+  complexity, which on the protocol-development panel is the binding constraint at low
+  RNA input: the 1 ug libraries have the highest csFRiP in that panel and a third of the
+  distinct molecules, so nothing already in the table would have caught them.
+
+  The unit is the `(position, strand, length)` triple the tag directories already carry,
+  not the 5' position the bedGraphs carry. That is not a detail: measured on this panel,
+  5' position alone treats between a half and three quarters of the distinct fragments as
+  duplicates, because an in-TSS position holds a median of about 3.7 distinct lengths.
+
+  Restricted to the final TSS set, which is load-bearing rather than cosmetic. Measured
+  genome-wide, the two libraries that failed QC outright ranked first and second on
+  complexity, since a library made of scattered background has more distinct positions
+  than a good one. Restricted to called TSSs they fall to ninth and eighteenth of
+  twenty-two.
+
+  Chao1 rather than a fixed-depth subsample because the shallowest library on the panel
+  had 2.5M in-TSS reads: matching depth would either throw away 90% of a good library's
+  data or return `NA` for exactly the libraries worth judging. It agrees with a
+  depth-matched count at rho = 0.88 among libraries that pass the other gates.
+
+  None of the three is gated on. `TSSChao1` still inflates for background-heavy
+  libraries, and `TSSSaturation` runs at rho = 0.77 against `csFRiP` among passing
+  libraries, so it partly restates purity. They are reported to be read beside it.
+
+### Note
+- `tests/data/golden/qc_final_*.txt` gain three columns and need
+  `tests/scripts/update_golden.sh <e2e outdir>` on the next e2e run.
+
 ## [0.15.0] - 2026-09-04
 
 ### Changed

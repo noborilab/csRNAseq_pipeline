@@ -199,6 +199,24 @@ if (length(five_files)) {
     stats_cs[["tRNA5pPct"]]  <- round(five[["tRNA5pPct"]][i], 1)
 }
 
+# ── Library complexity ──────────────────────────────────────────────────────
+#
+# Distinct fragments inside the final TSS set, a Chao1 extrapolation of what the
+# library could yield at infinite depth, and Good's coverage as the "is there any
+# point sequencing this deeper" number. Computed per library by qc_complexity,
+# which reads the tag directories, since a fragment needs both of its ends and the
+# bedGraphs carry only the 5' one. See that script for why the TSS restriction is
+# load-bearing and why none of this is gated on.
+cplx_files <- trimws(snakemake@input[["complexity"]])
+if (length(cplx_files)) {
+    cplx <- do.call(rbind, lapply(cplx_files, function(f)
+        as.data.frame(suppressWarnings(suppressMessages(readr::read_tsv(f, progress = FALSE))))))
+    i <- match(stats_cs[["Sample"]], cplx[["Sample"]])
+    stats_cs[["TSSDistinctFrag"]] <- cplx[["TSSDistinctFrag"]][i]
+    stats_cs[["TSSChao1"]]        <- cplx[["TSSChao1"]][i]
+    stats_cs[["TSSSaturation"]]   <- cplx[["TSSSaturation"]][i]
+}
+
 # ── Optional: miRNA and pre-tRNA contamination metrics ──────────────────────
 
 tss_in    <- import(trimws(snakemake@input[["tss_in"]]))

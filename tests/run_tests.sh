@@ -101,6 +101,7 @@ run_validate() {
         tss_size_composition_library tss_size_composition
         normalize_tss_quantification run_info
         quantify_final_in_tss qc_final_tss generate_normalized_bw
+        qc_five_prime qc_complexity
     )
     local missing=()
     for rule in "${expected_rules[@]}"; do
