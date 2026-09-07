@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-09-07
+
+### Changed
+- Refreshed `tests/data/golden/qc_final_cs.txt` for the three columns 0.16.0 added,
+  `TSSDistinctFrag`, `TSSChao1` and `TSSSaturation`, which takes that table to 47
+  columns. Nothing else in it moved. `qc_final_in.txt` is byte-identical and stays at 32,
+  since the complexity metrics are csRNA-only.
+
+  Two runs into separate output directories agreed on all three `*.complexity.txt` files
+  and on both QC tables, so the new `qc_complexity` rule holds the reproducibility
+  property 0.15.0 established, and `MinReplCorrPearson` sat on 0.5273890876768268 in both
+  rather than drifting a bit per run as it did before that release.
+
 ## [0.16.0] - 2026-09-07
 
 ### Added
