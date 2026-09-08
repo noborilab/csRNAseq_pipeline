@@ -62,6 +62,12 @@ tests/scripts/update_golden.sh "$tmp"    # prints the diff before overwriting
 Read the diff before committing it. A changed column set is expected after a deliberate
 change; a changed *value* in a column you did not touch is a regression.
 
+Two columns are pinned for their presence rather than their arithmetic. `snRNA5pPct` and
+`tRNA5pPct` read `NA` on every row, because `qc/snrnas` is unset in the test config and no
+synthetic read lands within 500 bp of the placeholder tRNA locus in `tests/data/trnas.bed`.
+Giving them real values means putting signal at those loci, which would also move
+`PretRNA`, `PretRNAPct` and `PhosEfficiency`.
+
 ## Unit tests
 
 Each file in `tests/unit/*.smk` is a minimal Snakefile with just a single rule in it.

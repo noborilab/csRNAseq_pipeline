@@ -30,6 +30,7 @@ dependencies:
   - bioconductor-genomicranges      # pulled in by rtracklayer; listed explicitly
   - bioconductor-iranges            # pulled in by GenomicRanges; listed explicitly
   - r-readr >=2.0                   # fast TSV reading
+  - r-data-table >=1.15             # fread in qc_complexity.R
 
   # ── Not available via conda ─────────────────────────────────────────────────
   # bfqutils (adapter trimming) must be installed manually:

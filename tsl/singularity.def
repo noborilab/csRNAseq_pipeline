@@ -10,6 +10,7 @@ Include: yum
     export WORKFLOW_DIR=/opt/software/csRNAseq_pipeline
     export PATH=/opt/software/homer/bin/:$PATH
     export PATH=/opt/software/bfqutils/:$PATH
+    export PATH=/opt/software/bam2td/:$PATH
     export PATH=/opt/software/snakemake/bin:$PATH
     export PATH=/opt/software/samtools/bin:$PATH
     export PATH=/opt/software/bedtools2/bin:$PATH
@@ -26,13 +27,16 @@ Include: yum
     dnf -y install openssl-devel ncurses-devel libdeflate-devel
     dnf -y install libxml2-devel
     dnf -y install git
-    dnf -y install pigz
+    dnf -y install pigz gawk
     dnf -y install python3.11
 
     mkdir -p /opt/software
 
     python3.11 -m venv /opt/software/snakemake
     /opt/software/snakemake/bin/pip install "snakemake==9.13.3" pandas
+    # Only tests/ needs these two: pyyaml for tests/scripts/make_test_config.py and
+    # pytest for the schema layer. Drop them if the container is for runs alone.
+    /opt/software/snakemake/bin/pip install pyyaml pytest
 
     cd /opt/software
     wget https://github.com/samtools/samtools/releases/download/1.21/samtools-1.21.tar.bz2
@@ -46,6 +50,9 @@ Include: yum
     cd /opt/software/homer
     wget http://homer.ucsd.edu/homer/configureHomer.pl
     perl configureHomer.pl -install
+    # Optional, and only a convenience: program/homer/genome also accepts a path to a
+    # genome FASTA, with the annotation supplied through program/homer/tss/gtf. Swap or
+    # drop this line for another organism.
     perl configureHomer.pl -install tair10
 
     cd /opt/software
@@ -54,6 +61,13 @@ Include: yum
     make libz
     make release
     make test
+
+    cd /opt/software
+    git clone https://github.com/noborilab/bam2td
+    cd bam2td
+    make release-full
+    # Fail the build here rather than at the first make_tagdir job
+    test -x /opt/software/bam2td/bam2td || { echo "bam2td did not build to the expected path" >&2; exit 1; }
 
     cd /opt/software
     git clone https://github.com/arq5x/bedtools2
@@ -73,6 +87,7 @@ Include: yum
     ln -s /opt/R/4.4.2/bin/Rscript /usr/local/bin/Rscript
 
     R -e "install.packages('readr', repos='http://cran.us.r-project.org')"
+    R -e "install.packages('data.table', repos='http://cran.us.r-project.org')"
     R -e "install.packages('BiocManager', repos='http://cran.us.r-project.org')"
     R -e "BiocManager::install('rtracklayer')"
     R -e "BiocManager::install('edgeR')"
