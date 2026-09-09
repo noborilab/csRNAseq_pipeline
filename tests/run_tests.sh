@@ -105,7 +105,7 @@ run_validate() {
     )
     local missing=()
     for rule in "${expected_rules[@]}"; do
-        if ! echo "$dry_out" | grep -qE "^$rule[[:space:]]"; then
+        if ! grep -qE "^$rule[[:space:]]" <<< "$dry_out"; then
             missing+=("$rule")
         fi
     done

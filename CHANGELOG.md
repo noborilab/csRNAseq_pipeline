@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.3] - 2026-09-09
+
 ### Fixed
 - Enforce `tss_min_reps` for conditions with only one surviving library, including
   after QC exclusion. Conditions with insufficient support contribute no loci.
@@ -33,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-million total reads. Filenames are retained for compatibility.
 
 ### Tests
+- Avoid a `pipefail`/SIGPIPE false failure while checking rules in long dry-run output.
 - Add regressions for insufficient surviving replicates, shared-input enrichment,
   unequal depths, reordered/mismatched regions, disabled filtering and provenance.
 - Add an end-to-end ratio-filter run that checks actual HOMER consensus coordinates
