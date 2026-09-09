@@ -54,9 +54,9 @@ qc:
 ## `program / genome_index`
 
 Path to the aligner's index. When it does not exist and you have set `genome_fasta`, the
-pipeline builds it under `intermediate_dir`. Do not point `genome_index` and
-`genome_fasta` at the same path, because the pipeline then assumes the index already
-exists.
+pipeline builds it at `genome_index`. Use a directory for STAR and a file prefix for
+the other aligners. Keep references immutable within a project; when changing a FASTA,
+use a new index path and output directory.
 
 ## `program / homer / genome`
 
@@ -104,16 +104,18 @@ is on `PERL5LIB`. Check that inside your container before setting `program:
 Three HOMER thresholds are configurable, each defaulting to HOMER's own value:
 
 - `pseudo_count` (1.0). HOMER adds this to both sides of the enrichment ratio, which is
-  what lets a TSS with no input coverage pass automatically, since `log2((cs+1)/(0+1))`
-  is large by construction. Raise it to demand real input coverage.
+  stabilizes ratios at low coverage. Increasing it reduces ratios driven by small
+  counts, but neither its default nor a larger value requires nonzero input coverage
+  or guarantees that a cluster passes the other calling criteria.
 - `default_log2_fold` (1) is the threshold HOMER uses whenever it has no annotation.
 - `local_fold` (2) is the local enrichment required during initial TSS identification.
 
 ## `filtering / exclude_failed_from_consensus`
 
 The consensus set is a union, so a library that fails QC does not merely have poor
-numbers of its own: the spurious TSSs it calls enter the shared set and everything
-downstream quantifies them. Set this to drop failed libraries from the union. It
+numbers of its own: its calls enter the shared set and everything downstream
+quantifies them, including any false calls. A failed QC gate does not itself label
+individual loci as false. Set this to drop failed libraries from the union. It
 defaults to `False`, and the pipeline prints a warning that names the offending
 libraries either way.
 
@@ -135,16 +137,15 @@ The lowest enrichment threshold a library's TSS calling may use before the libra
 QC. Unset by default, in which case it falls back to `program / homer / tss /
 default_log2_fold`.
 
-With an annotation HOMER chooses this threshold per library from the data and writes it
-into `tss/<sample>.stats.txt` as `log2 fold vs. input`. Sound libraries get sensible
-values. Libraries that have lost their capped signal get thresholds at or below zero,
-which accept TSSs that carry less signal than their own input, and because the consensus
-is a union those calls propagate to everything downstream. HOMER offers no flag to floor
-the threshold, so the pipeline reads it back and gates on it here.
+With an annotation HOMER chooses this threshold per library from annotated TSS and
+exon distributions. A low value can flag weak separation between initiation signal and
+background, but also depends on annotation quality, the input library, and the biology.
+It is not proof that a library failed or that every accepted locus is false. HOMER offers
+no flag to floor the selected threshold, so this pipeline can gate the library here.
 
-Falling back to `default_log2_fold` is the more defensible bound, because a threshold
-chosen from the data should not end up looser than the constant it replaced. You can set
-this key explicitly if you would rather gate independently of it.
+The fallback to `default_log2_fold` is a conservative policy choice, not a statistical
+requirement. Inspect the paired libraries and annotation before excluding a sample.
+Set this key explicitly to use a separately calibrated bound.
 
 ```yaml
 qc:
@@ -217,7 +218,8 @@ Only the initial `Status` feeds `collect_consensus_tss`. See the closing note in
 The pipeline applies this filter after quantification and before TMM normalization. A
 TSS reaches `tss.final.bed` only if its CPM, counts per million library-size reads
 without TMM, is at least `tss_min_cpm` in at least `tss_min_samples` csRNA samples. The
-defaults of 0 and 1 keep every TSS.
+defaults of 0 and 1 keep every TSS. Here the library size is the sum of counts
+in all consensus TSSs before filtering, not all sequenced or mapped reads.
 
 ```yaml
 filtering:
@@ -227,13 +229,11 @@ filtering:
 
 ## `filtering / tss_srna_sizes` and the read-size composition filter
 
-Abundant uncapped small RNAs are the one contaminant the other filters cannot reach. In
-plants the 21-25 nt siRNAs, above all the 24 nt Pol IV class over transposons, survive
-the enzymatic depletion well enough that HOMER calls them as TSSs. Enrichment over the
-input holds them off while the csRNA library is clean but degrades as the library
-degrades, because a library that has lost its capped signal is proportionally richer in
-siRNA than its own input. Read length is the signal that does not degrade, since genuine
-initiation is never confined to one small size class.
+Abundant processed small RNAs can survive library preparation and be called as TSSs.
+Concentration at 21–25 nt can flag plant small-RNA contamination, but read length alone
+does not establish RNA origin or cap chemistry. Size selection, trimming, sequencing
+length and sampling depth also shape this distribution. Validate the filter against
+known initiation loci and examine the clusters it removes.
 
 List the contaminating lengths in `tss_srna_sizes`. The pipeline then drops a TSS when
 more than `tss_max_srna_fraction` of its reads fall in those sizes. Only libraries with
@@ -260,11 +260,12 @@ anything.
 ## `filtering / tss_max_top_sizes_fraction` and the top-lengths filter
 
 The size list above catches only contaminants whose length you can name in advance. This
-filter needs no list and asks instead how concentrated a TSS is in its own commonest
-read lengths. Genuine initiation is heterogeneous, because a promoter fires across a
-window and the resulting RNAs vary in length, so a protein-coding TSS spreads over tens
-of lengths. A discretely processed RNA has one 5′ end and one 3′ end and puts nearly
-everything into one or two.
+filter needs no list and asks how concentrated a cluster is in its commonest read
+lengths. Processed RNAs can be concentrated in one or two lengths, whereas many
+promoter-derived libraries have broader distributions. This is a heuristic: a narrow
+insert distribution is not proof of contamination, and a focused 5′ initiation site
+can still produce heterogeneous RNA lengths. Technical size selection and truncation
+must be considered before applying the filter.
 
 Set `tss_max_top_sizes_fraction` below 1 to enable it and `tss_top_sizes_n` for how many
 lengths to add up. The `tss_srna_min_reads` and `tss_srna_min_samples` gates apply here
@@ -286,3 +287,79 @@ commonest lengths, 5 by default, and `normalize_tss_quantification` picks out th
 `tss_top_sizes_n` asks for, so retuning `tss_top_sizes_n` within that bound costs
 nothing and it must not exceed it. Only `tss_srna_sizes` and `tss_top_sizes_max` force a
 re-read of the tag directories.
+
+## Stricter discovery options
+
+The defaults retain a permissive discovery catalogue. For a study with at least two
+biological replicates per condition, the following is a starting point to evaluate,
+not a universally validated preset. Merge these keys into your existing configuration:
+
+```yaml
+filtering:
+  exclude_failed_from_consensus: true
+  tss_min_reps: 2
+  tss_min_cpm: 1
+  tss_min_samples: 2
+  # Optional plant-specific screens; inspect losses at known promoters first.
+  tss_srna_sizes: [21, 22, 23, 24, 25]
+  tss_max_srna_fraction: 0.5
+  tss_top_sizes_n: 2
+  tss_max_top_sizes_fraction: 0.8
+  tss_srna_min_reads: 100
+  tss_srna_min_samples: 1
+qc:
+  min_cs_frip: 0.9
+  min_pct_nuclear: 90
+  min_log2_fold: 1
+```
+
+Calibrate the three QC gates against controls before using them to exclude libraries;
+these are the existing default gates, not externally validated quality cutoffs.
+`tss_min_reps` requires support within a condition, after QC exclusion. A condition
+with fewer surviving libraries contributes no new loci, though its libraries are still
+quantified at loci contributed by other conditions. QC exclusion affects discovery
+only: failed libraries remain in count matrices, normalization and size-filter voting.
+For a final biological analysis, remove rejected libraries from the sample table and
+rerun in a new output directory; otherwise they can still influence those steps.
+
+The CPM sample count applies across all csRNA libraries. The size filters can delete a
+cluster globally because of one library (`tss_srna_min_samples: 1`); raising that to 2
+reduces this risk but can miss contaminants only visible in one size-selection arm.
+Low-count clusters below `tss_srna_min_reads` escape these size screens. Compare the
+filters separately before combining them, report their losses, and avoid changing
+thresholds to maximize a desired treatment difference. Final QC gates are descriptive
+and may need separate calibration because their TSS regions differ.
+
+## Optional csRNA/input ratio screen
+
+`filtering / tss_min_cs_in_ratio` defaults to 0 (disabled). When enabled, the pipeline
+quantifies input libraries over the exact same consensus regions as csRNA libraries,
+including their adjusted boundaries. It retains a cluster if at least
+`tss_min_ratio_samples` paired comparisons meet the requested ratio:
+
+```
+(csRNA_count / csRNA_non_organelle_depth) /
+(max(input_count, 1) / input_non_organelle_depth)
+```
+
+Depth is `TotalReads - OrganelleReads` from the filtered tag directories, with organelles
+defined by `qc / organelle_chroms`. These depths include non-organelle contigs omitted
+from `chrom_sizes`, so use consistent references and organelle definitions. The input
+floor is one read before depth normalization. This is an enrichment screen, not a
+significance test; low counts remain uncertain. A threshold of 2 means twofold
+normalized enrichment. It is optional even in the stricter configuration because HOMER
+already screens enrichment, and this extra screen can remove weak genuine initiation.
+
+Versions through 0.16.2 used raw count ratios and joined input counts from the initial
+region set by reassigned IDs. Results with this option enabled must be regenerated;
+old numerical thresholds do not have the same meaning.
+
+## Annotation masks and biological scope
+
+Providing `qc / mirnas` or `qc / trnas` also removes consensus regions overlapping
+those annotations on either strand. This can remove primary miRNA initiation or nearby
+and antisense promoters as well as processed-RNA contamination. Leave a mask empty if
+those loci are in scope, and evaluate contamination using other QC evidence. The current
+configuration couples these QC annotations to masking; it does not distinguish mature
+processed RNA from primary transcription simply by overlap. The [original csRNA-seq
+study](https://pmc.ncbi.nlm.nih.gov/articles/PMC6836739/) includes primary miRNA initiation.

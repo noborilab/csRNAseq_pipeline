@@ -15,7 +15,7 @@ tss <- import(snakemake@input[["bed"]])   # tss.consensus.bed
 
 quant <- as.data.frame(suppressWarnings(suppressMessages(readr::read_tsv(trimws(snakemake@input[["quant"]])))))
 tag_cols <- grep(" Tag Count", colnames(quant))
-quant_m <- as.matrix(quant[, tag_cols])
+quant_m <- as.matrix(quant[, tag_cols, drop = FALSE])
 colnames(quant_m) <- basename(gsub(' Tag Count .+', '', colnames(quant_m)))
 rownames(quant_m) <- quant[[1]]
 
@@ -34,19 +34,9 @@ cat("CPM filter: kept ", sum(keep), " of ", length(keep), " consensus TSSs\n", s
 # way: a cluster is dropped when some measure of its reads exceeds a fraction, in at least
 # min_samples libraries that have at least min_reads reads there.
 #
-#   1. Small-RNA sizes (filtering.tss_srna_sizes, in plants the 21-25 nt siRNAs).  Those
-#      species are uncapped but survive the enzymatic depletion well enough to be called
-#      as TSS clusters.  Enrichment over the input holds them off while the csRNA library
-#      is clean and degrades as the library degrades, since a library that has lost its
-#      capped signal is proportionally richer in siRNA than its own input: measured on
-#      Arabidopsis, 1% of siRNA-dominated clusters clear a 2-fold enrichment filter in a
-#      good library against 61% in the worst.  Read size does not degrade that way.
-#   2. Top-n lengths (filtering.tss_max_top_sizes_fraction), whatever those lengths are.
-#      Genuine initiation is heterogeneous: a promoter yields reads across tens of
-#      lengths, so its two commonest lengths hold only a fifth or so of it.  A discretely
-#      processed RNA puts nearly everything into one or two lengths.  This catches
-#      contaminants that fall outside any fixed size list, e.g. the 27-28 nt
-#      5'-polyphosphate species found over some transposons.
+# Known-size and top-length concentration screens are empirical indicators of
+# processed-RNA contamination. Size selection, trimming and sampling can also narrow
+# genuine initiation products; neither screen determines RNA origin or cap state.
 srna_sizes       <- trimws(as.character(snakemake@params[["srna_sizes"]]))
 srna_sizes       <- if (nzchar(srna_sizes)) strsplit(srna_sizes, "[[:space:]]+")[[1]] else character(0)
 max_srna_frac    <- snakemake@params[["max_srna_fraction"]]
@@ -107,32 +97,55 @@ if (length(srna_sizes) > 0 || max_top_frac < 1) {
     }
 }
 
-# csRNA/sRNA ratio filter: keep TSSs where (csRNA reads / paired input reads)
-# >= tss_min_cs_in_ratio in >= tss_min_ratio_samples samples.
-# Uses input reads at the initial csRNA TSS set (all_cs.tss_merged_quant_in.txt),
-# subsetted to the consensus TSS IDs that survived the CPM filter.
-min_cs_in_ratio  <- snakemake@params[["min_cs_in_ratio"]]
+# Optional enrichment filter: both counts must describe exactly the same consensus
+# regions. Normalize against all retained non-organelle tags, not counts in the
+# selected TSS set, so changing that set does not change the depth denominator.
+min_cs_in_ratio   <- snakemake@params[["min_cs_in_ratio"]]
 min_ratio_samples <- snakemake@params[["min_ratio_samples"]]
 
 if (min_cs_in_ratio > 0) {
+    input_table <- as.data.frame(readr::read_tsv(snakemake@input[["quant_in"]],
+                                               show_col_types = FALSE))
     quant_in_m <- read_homer_quant(snakemake@input[["quant_in"]])
-    common_ids <- intersect(rownames(quant_m), rownames(quant_in_m))
-    quant_in_m <- quant_in_m[common_ids, , drop = FALSE]
-    quant_ratio_m <- quant_m[common_ids, , drop = FALSE]
-
+    if (anyDuplicated(quant[[1]]) || anyDuplicated(input_table[[1]]) ||
+        !setequal(quant[[1]], input_table[[1]])) {
+        stop("csRNA and input quantification must contain the same unique consensus TSS IDs")
+    }
+    input_order <- match(quant[[1]], input_table[[1]])
+    # HOMER tables share a coordinate convention; compare their location columns
+    # directly rather than assuming that sequential TSS IDs identify the same loci.
+    if (!identical(unname(as.matrix(quant[, 2:5])),
+                   unname(as.matrix(input_table[input_order, 2:5])))) {
+        stop("csRNA and input consensus TSS coordinates/strands disagree")
+    }
     cs_ids <- strsplit(snakemake@params[["cs_ids"]], " ", fixed = TRUE)[[1]]
     in_ids <- strsplit(snakemake@params[["paired_in_ids"]], " ", fixed = TRUE)[[1]]
+    if (length(cs_ids) != length(in_ids) || !all(cs_ids %in% colnames(quant_m)) ||
+        !all(in_ids %in% colnames(quant_in_m))) stop("invalid csRNA/input sample pairing")
 
-    ratio_m <- sapply(seq_along(cs_ids), function(i) {
-        quant_ratio_m[, cs_ids[i]] / pmax(quant_in_m[, in_ids[i]], 1)
-    })
-    if (is.null(dim(ratio_m))) dim(ratio_m) <- c(length(ratio_m), 1)
-    rownames(ratio_m) <- common_ids
-
+    nuclear_depth <- function(path, ids) {
+        stats <- read.delim(path, check.names = FALSE)
+        if (anyDuplicated(stats$Sample) || !all(ids %in% stats$Sample))
+            stop("missing or duplicate library depth records")
+        depth <- (stats$TotalReads - stats$OrganelleReads)[match(ids, stats$Sample)]
+        if (length(depth) != length(ids) || any(!is.finite(depth) | depth <= 0))
+            stop("ratio filter requires positive finite non-organelle library depths")
+        depth
+    }
+    cs_depth <- nuclear_depth(snakemake@input[["stats_cs"]], cs_ids)
+    in_depth <- nuclear_depth(snakemake@input[["stats_in"]], in_ids)
+    # One input read is the explicit denominator floor. This avoids infinite
+    # ratios at zero input; it is a screening heuristic, not a significance test.
+    ratio_m <- matrix(0, nrow(quant_m), length(cs_ids))
+    for (i in seq_along(cs_ids)) {
+        ratio_m[, i] <- (quant_m[, cs_ids[i]] / cs_depth[i]) /
+            (pmax(quant_in_m[rownames(quant_m), in_ids[i]], 1) / in_depth[i])
+    }
     keep_ratio <- rowSums(ratio_m >= min_cs_in_ratio) >= min_ratio_samples
-    quant_m <- quant_m[common_ids, , drop = FALSE][keep_ratio, , drop = FALSE]
-    tss     <- tss[mcols(tss)[["name"]] %in% rownames(quant_m)]
-    cat("Ratio filter: kept ", sum(keep_ratio), " of ", length(keep_ratio), " TSSs\n", sep = "")
+    quant_m <- quant_m[keep_ratio, , drop = FALSE]
+    tss <- tss[mcols(tss)[["name"]] %in% rownames(quant_m)]
+    cat("Depth-normalized ratio filter: kept ", sum(keep_ratio), " of ",
+        length(keep_ratio), " TSSs\n", sep = "")
 }
 
 if (!nrow(quant_m)) {

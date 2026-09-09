@@ -331,6 +331,8 @@ run_unit_smk() {
 }
 
 run_unit() {
+    run_step "filter regressions" Rscript tests/scripts/test_filter_regressions.R
+    run_step "provenance" python tests/scripts/test_provenance.py
     for rule in normalize size_composition collect_consensus qc_initial qc_final aln_summary; do
         run_step "unit/$rule" run_unit_smk "$rule"
     done
@@ -383,6 +385,16 @@ run_e2e() {
     python tests/e2e/check_annotation_wiring.py "$tmp3"
 }
 
+run_ratio_e2e() {
+    local tmp cfg
+    tmp=$(mktemp -d)
+    cfg=$(make_cfg "$tmp" "$tmp" "$tmp/index/genome.fa" --min-ratio 0.01 --min-reps 2)
+    trap "rm -rf $tmp $cfg" EXIT
+    snakemake --cores 4 -s workflow/Snakefile --configfile "$cfg"
+    python tests/e2e/assertions.py "$tmp" --skip-golden
+    python tests/e2e/check_ratio_wiring.py "$tmp"
+}
+
 # ── per-aligner e2e ───────────────────────────────────────────────────────────
 # run_aligner_e2e PROG
 # Runs a full pipeline end-to-end with a non-default alignment program and
@@ -424,6 +436,10 @@ case "$CMD" in
         ;;
     e2e)
         run_step "e2e" run_e2e
+        run_step "e2e/ratio" run_ratio_e2e
+        ;;
+    ratio)
+        run_step "e2e/ratio" run_ratio_e2e
         ;;
     star)
         run_step "e2e/STAR" run_aligner_e2e "STAR"
@@ -442,13 +458,14 @@ case "$CMD" in
         run_step "validate"    run_validate
         run_unit
         run_step "e2e"         run_e2e
+        run_step "e2e/ratio"   run_ratio_e2e
         run_step "e2e/STAR"    run_aligner_e2e "STAR"
         run_step "e2e/bowtie2" run_aligner_e2e "bowtie2"
         run_step "e2e/bwa-mem" run_aligner_e2e "bwa-mem"
         run_step "e2e/hisat2"  run_aligner_e2e "hisat2"
         ;;
     *)
-        echo "Usage: $0 [schema|validate|unit|e2e|star|bowtie2|bwa-mem|hisat2|all] [-k]" >&2
+        echo "Usage: $0 [schema|validate|unit|e2e|ratio|star|bowtie2|bwa-mem|hisat2|all] [-k]" >&2
         exit 1
         ;;
 esac

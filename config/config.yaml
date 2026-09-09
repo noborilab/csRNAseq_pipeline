@@ -61,8 +61,8 @@ program:
       # findcsRNATSS.pl is a legacy shim for findcsRNATSR.pl. Their output is
       # identical; TSR needs HOMER's bin on PERL5LIB, so the shim stays the default.
       program: "findcsRNATSS.pl"
-      # HOMER's own defaults, exposed so they can be tuned. pseudo_count is what lets
-      # a cluster with no input coverage pass the enrichment test automatically.
+      # HOMER's own defaults, exposed so they can be tuned. pseudo_count stabilizes
+      # low-count ratios; zero input alone does not guarantee a cluster will pass.
       pseudo_count: 1.0
       default_log2_fold: 1
       local_fold: 2
@@ -84,14 +84,13 @@ filtering:
   exclude_failed_from_consensus: False
   # Read-size composition filters, both gated by tss_srna_min_reads / min_samples.
   # (1) Known small RNA sizes. Drops clusters whose reads sit mostly in the listed
-  # lengths. Empty list disables it; for plants use [21, 22, 23, 24, 25], where the
-  # 24 nt Pol IV siRNAs over transposons are the main population that survives
-  # TEX/AP and gets called as TSSs.
+  # lengths. Empty list disables it; [21, 22, 23, 24, 25] is a plant-specific
+  # screen to validate against known initiation sites, not proof of RNA origin.
   tss_srna_sizes: []
   tss_max_srna_fraction: 0.5
-  # (2) Concentration in the commonest lengths, whatever they are. Real initiation
-  # spreads over tens of lengths; a discretely processed RNA does not. Set the
-  # fraction below 1 to enable; 0.8 with n = 2 is a good starting point.
+  # (2) Concentration in the commonest lengths. Technical size selection can also
+  # narrow genuine initiation products. Set below 1 to enable; evaluate 0.8 with
+  # n = 2 on controls before applying it to biological comparisons.
   tss_top_sizes_n: 2
   tss_max_top_sizes_fraction: 1
   # top1..top<max> are precomputed, so tss_top_sizes_n can be retuned anywhere in that

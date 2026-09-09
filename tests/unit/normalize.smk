@@ -17,6 +17,8 @@ rule test_normalize_tss_quantification:
     input:
         quant=FIXTURES + "/tss.consensus.homer.raw.txt",
         quant_in=FIXTURES + "/tss.consensus.in.homer.raw.txt",
+        stats_cs=FIXTURES + "/stats_cs.txt",
+        stats_in=FIXTURES + "/stats_in.txt",
         bed=FIXTURES + "/tss.consensus.bed",
         sizes=FIXTURES + "/tss.consensus.sizes.txt",
     output:

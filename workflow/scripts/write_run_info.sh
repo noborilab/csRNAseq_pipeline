@@ -26,7 +26,7 @@ ver() {
     if git -C "$REPO_DIR" rev-parse --git-dir > /dev/null 2>&1; then
         printf 'commit          %s%s\n' \
             "$(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null)" \
-            "$(git -C "$REPO_DIR" diff --quiet 2>/dev/null || echo ' (working tree dirty)')"
+            "$(git -C "$REPO_DIR" diff --quiet HEAD 2>/dev/null || echo ' (working tree dirty)')"
     else
         printf 'commit          (not a git checkout)\n'
     fi
@@ -50,8 +50,12 @@ ver() {
     ver hisat2 hisat2 --version
     ver bfqutils bfqutils --version
     ver bam2td bam2td --version
-    ver findcsRNATSS findcsRNATSS.pl
+    # HOMER help text contains numeric thresholds that are not software versions.
+    # Its config.txt and executable fingerprints below identify the installed build.
     printf '  %-12s %s\n' HOMER "$(command -v findcsRNATSS.pl > /dev/null 2>&1 && dirname "$(command -v findcsRNATSS.pl)" || echo '(not on PATH)')"
+
+    printf '\ncontent fingerprints and installed packages\n'
+    python "$REPO_DIR/workflow/scripts/provenance.py" "$CONFIG_DUMP" "$REPO_DIR" || exit 1
 
     printf '\nresolved config\n'
     sed 's/^/  /' "$CONFIG_DUMP"

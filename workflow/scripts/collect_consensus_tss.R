@@ -35,7 +35,7 @@ if (length(failed)) {
     message("WARNING: ", length(failed), " csRNA librar", if (length(failed) == 1) "y" else "ies",
             " failed QC and still contribute to the consensus union: ",
             paste(failed, collapse = ", "),
-            "\n         Their spurious clusters enter the shared TSS set. Set ",
+            "\n         Their calls enter the shared TSS set; a QC flag is not proof that every call is false. Set ",
             "filtering.exclude_failed_from_consensus to true to drop them.")
   }
 }
@@ -50,6 +50,10 @@ if (nreps > 1) {
 }
 tss_all <- vector('list', length(samples))
 sampleTSSs <- function(s, fn, n) {
+    if (length(fn) < n) {
+        message("Skipping ", s, ": ", length(fn), " surviving libraries, but ", n, " required")
+        return(GRanges())
+    }
     if (length(fn) == 1) {
         tss <- sort(reduce(sort(import(fn))))
     } else {
@@ -82,6 +86,7 @@ cs <- read.table(snakemake@params[["chrom_sizes"]], header = FALSE)
 valid_chroms <- as.character(cs$V1)
 
 tss <- do.call(c, tss_all)
+if (!length(tss)) stop("no TSSs meet tss_min_reps after QC exclusion and replicate filtering")
 tss <- sort(reduce(sort(tss)))
 tss <- tss[as.character(seqnames(tss)) %in% valid_chroms, ]
 seqlevels(tss, pruning.mode = "coarse") <- intersect(valid_chroms, seqlevels(tss))

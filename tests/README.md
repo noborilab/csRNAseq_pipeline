@@ -87,10 +87,12 @@ python tests/e2e/unit_assertions.py normalize $tmp
 
 ## End-to-end test
 
-The e2e test runs the full pipeline twice:
+The e2e test runs the full pipeline in four configurations:
 
 1. **Default params** (`tss_min_cpm=0`): asserts `tss.final.bed` == `tss.consensus.bed` row-count.
-2. **Strict filter** (`tss_min_cpm=10, tss_min_samples=2`): asserts `tss.final.bed` has fewer rows.
+2. **Strict CPM filter** (`tss_min_cpm=10000, tss_min_samples=3`): asserts `tss.final.bed` has fewer rows.
+3. **Annotation enabled**: verifies HOMER actually reads the GTF and estimates a threshold.
+4. **Ratio screen and two-replicate consensus**: verifies the csRNA/input quantification coordinates match and validates reference hashes in the manifest. Run this case alone with `./tests/run_tests.sh ratio`.
 
 Outputs go to temporary directories and are cleaned up automatically.
 
@@ -99,3 +101,22 @@ Outputs go to temporary directories and are cleaned up automatically.
 - **New schema case**: add a TSV to `tests/schema/` and a test method in `test_schemas.py`.
 - **New R-script unit test**: copy one of `tests/unit/*.smk`, wire in fixtures, add assertions to `unit_assertions.py`.
 - **New e2e assertion**: add a check in `tests/e2e/assertions.py`.
+
+### Filtering and provenance regressions
+
+The unit layer also runs `tests/scripts/test_filter_regressions.R` against the production
+R scripts. Cases cover a one-library condition under a two-replicate requirement, QC
+exclusion leaving insufficient replicates, shared input, depth-normalized enrichment,
+reordered input rows, mismatched IDs/coordinates, and the disabled filter. The Python
+provenance tests check content changes, missing files, index components and installed
+HOMER genome resolution. These can run without Snakemake:
+
+```bash
+Rscript tests/scripts/test_filter_regressions.R
+python tests/scripts/test_provenance.py
+```
+
+If a manually installed R works interactively but Snakemake cannot load its packages,
+remember that Snakemake invokes `Rscript --vanilla`, which skips `.Renviron`. Export the
+intended `R_LIBS` before the run and check that R and the packages use the same
+architecture. Do not mix native R with incompatible conda libraries.

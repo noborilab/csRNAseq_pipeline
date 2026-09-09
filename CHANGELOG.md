@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Enforce `tss_min_reps` for conditions with only one surviving library, including
+  after QC exclusion. Conditions with insufficient support contribute no loci.
+- The optional csRNA/input ratio screen now quantifies input over the same consensus
+  coordinates as csRNA, verifies IDs and coordinates, and adjusts each library by
+  retained non-organelle read depth. A one-read input denominator floor remains.
+  Previous results with this option enabled must be regenerated and thresholds
+  reassessed; the default disabled setting preserves existing results.
+- Preserve count-matrix dimensions for a single csRNA library.
+- Point `--use-conda` at the tracked full environment and keep existing index sentinels
+  as alignment inputs.
+
+### Changed
+- Pin core analysis versions in the environment specs. The Linux container recipe uses
+  a public base, fixed source revisions/releases, and the local workflow checkout.
+  It is still a build recipe, not a transitive lock; archive the tested image.
+- Expand run provenance to reference/index, source and executable content fingerprints,
+  exact installed package versions/builds and R session information. Wait for both
+  bigWig strands and final QC before writing the manifest. Stop parsing HOMER help-text
+  thresholds as a software version; record installation metadata and hashes instead.
+- Document a stricter exploratory configuration, the limits of QC/length heuristics and
+  annotation masking, and environment replay.
+- Describe bigWigs as scaled by TMMwsp-adjusted retained-TSS library sizes, rather than
+  per-million total reads. Filenames are retained for compatibility.
+
+### Tests
+- Add regressions for insufficient surviving replicates, shared-input enrichment,
+  unequal depths, reordered/mismatched regions, disabled filtering and provenance.
+- Add an end-to-end ratio-filter run that checks actual HOMER consensus coordinates
+  and reference fingerprints.
+
 ## [0.16.2] - 2026-09-08
 
 ### Fixed

@@ -1,8 +1,8 @@
-BootStrap: yum
-OSVersion: 9
-MirrorURL: http://yum-repos.hpccluster/AlmaLinux/9/os/$basearch/
-Include: yum
- 
+Bootstrap: docker
+From: almalinux:9.4
+# Build from the repository root. Archive the tested SIF and its SHA256; OS and
+# transitive package repositories are not locked by this source recipe.
+
 %environment
     export LANG=C
     export LC_ALL=C
@@ -16,8 +16,15 @@ Include: yum
     export PATH=/opt/software/bedtools2/bin:$PATH
     export PATH=/opt/software/bwa/:$PATH
 
+%files
+    workflow /opt/software/csRNAseq_pipeline/workflow
+    config /opt/software/csRNAseq_pipeline/config
+    tests /opt/software/csRNAseq_pipeline/tests
+    VERSION /opt/software/csRNAseq_pipeline/VERSION
+    LICENSE /opt/software/csRNAseq_pipeline/LICENSE
+
 %post
-    dnf -y install wget langpacks-en_GB.noarch tar gzip perl-App-cpanminus
+    dnf -y install wget langpacks-en_GB.noarch tar gzip perl-App-cpanminus dnf-plugins-core
     dnf -y install epel-release
     dnf config-manager --set-enabled crb
     dnf -y install openblas-devel
@@ -33,10 +40,10 @@ Include: yum
     mkdir -p /opt/software
 
     python3.11 -m venv /opt/software/snakemake
-    /opt/software/snakemake/bin/pip install "snakemake==9.13.3" pandas
+    /opt/software/snakemake/bin/pip install "snakemake==9.13.3" "pandas==2.3.3"
     # Only tests/ needs these two: pyyaml for tests/scripts/make_test_config.py and
     # pytest for the schema layer. Drop them if the container is for runs alone.
-    /opt/software/snakemake/bin/pip install pyyaml pytest
+    /opt/software/snakemake/bin/pip install "pyyaml==6.0.3" "pytest==8.4.2"
 
     cd /opt/software
     wget https://github.com/samtools/samtools/releases/download/1.21/samtools-1.21.tar.bz2
@@ -49,15 +56,18 @@ Include: yum
     mkdir -p /opt/software/homer
     cd /opt/software/homer
     wget http://homer.ucsd.edu/homer/configureHomer.pl
-    perl configureHomer.pl -install
+    perl configureHomer.pl -install homer -version v5.1
     # Optional, and only a convenience: program/homer/genome also accepts a path to a
     # genome FASTA, with the annotation supplied through program/homer/tss/gtf. Swap or
     # drop this line for another organism.
-    perl configureHomer.pl -install tair10
+    # -version disables dependency installation, so install the organism explicitly.
+    perl configureHomer.pl -install arabidopsis -version v7.0
+    perl configureHomer.pl -install tair10 -version v6.0
 
     cd /opt/software
     git clone https://github.com/noborilab/bfqutils
     cd bfqutils
+    git checkout --detach c848439428ad9c2b7de0f0bc0113cc56b729577a
     make libz
     make release
     make test
@@ -65,6 +75,7 @@ Include: yum
     cd /opt/software
     git clone https://github.com/noborilab/bam2td
     cd bam2td
+    git checkout --detach 361c8b4c5afd3e9a52067a246e055febe02074d9
     make release-full
     # Fail the build here rather than at the first make_tagdir job
     test -x /opt/software/bam2td/bam2td || { echo "bam2td did not build to the expected path" >&2; exit 1; }
@@ -72,11 +83,13 @@ Include: yum
     cd /opt/software
     git clone https://github.com/arq5x/bedtools2
     cd bedtools2
+    git checkout --detach v2.31.1
     make
 
     cd /opt/software
     git clone https://github.com/lh3/bwa
     cd bwa
+    git checkout --detach b92993c1161e73167181558856567ef2f367e3f0
     make
 
     cd /opt/software
@@ -89,11 +102,11 @@ Include: yum
     R -e "install.packages('readr', repos='http://cran.us.r-project.org')"
     R -e "install.packages('data.table', repos='http://cran.us.r-project.org')"
     R -e "install.packages('BiocManager', repos='http://cran.us.r-project.org')"
-    R -e "BiocManager::install('rtracklayer')"
-    R -e "BiocManager::install('edgeR')"
+    R -e "BiocManager::install('rtracklayer', version='3.20', ask=FALSE)"
+    R -e "BiocManager::install('edgeR', version='3.20', ask=FALSE)"
 
     cd /opt/software
-    git clone https://github.com/noborilab/csRNAseq_pipeline
+    # The workflow was copied from the reviewed local checkout in %files.
     chmod -R a+rX /opt/software/csRNAseq_pipeline
 
 %runscript

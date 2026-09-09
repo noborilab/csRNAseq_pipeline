@@ -21,11 +21,11 @@ comparable row by row. Before acting on any of these numbers, it is worth readin
 | `ModeReadLength` | Commonest read length in the same histogram, the shorter length winning a tie. This one is weak on its own, because a healthy csRNA library is nearly flat in length and the winning bin flips between replicates of the same arm. A mode sitting far from the median is best read as a prompt to open the histogram, rather than as a measurement in itself. |
 | `ModeReadFraction` | Percentage of reads that sit at `ModeReadLength`, so the height of the tallest bin. Of the length columns this is the one that separates library types cleanly. Nothing gates on it, and it is not independent evidence, because it largely restates `PctNuclear` and `csFRiP`. |
 | `TSSDistinctFrag` | Distinct fragments inside the final TSS set, where a fragment is a `(position, strand, length)` triple from the tag directory, so both ends define it. Depends on sequencing depth, so it is the denominator for the two below rather than something to compare across libraries. The rule excludes organelle chromosomes, as `csFRiP` does. |
-| `TSSChao1` | Chao1 extrapolation of the fragments the library could yield at infinite depth, from its singleton and doubleton counts. It needs no subsampling, which is why the table reports it in place of a depth-matched count. |
-| `TSSSaturation` | Good's coverage, `1 - singletons/reads`: the estimated chance the next read comes from a fragment already seen. This is the number to read when you are deciding whether more sequencing would pay. |
-| `snRNA5pPct` | Share of the signal within 500 bp of an annotated snRNA 5′ end that sits within 5 bp of it, which requires a stranded `qc / snrnas`. Sm-class snRNAs are capped Pol II transcripts, so a working library puts nearly all of it on the 5′ end. Unlike `PhosEfficiency` it needs no matched input library. |
-| `tRNA5pPct` | The same measurement at mature tRNA 5′ ends, which requires a stranded `qc / trnas`. RNase P leaves a 5′-monophosphate there, which becomes ligation-competent when the phosphatase step fails, so this moves opposite to `snRNA5pPct`. The table carries it as a cross-check on which chemistry failed rather than as a gate, since it does not separate good libraries from bad ones on its own. |
-| `csFRiP` | Fraction of nuclear reads falling in csRNA-called TSSs. It should be above 0.9 in a good csRNA library. |
+| `TSSChao1` | Chao1 estimate of fragment-pattern richness from singleton and doubleton counts, subject to sampling assumptions. It is not a molecule count or a replacement for matched-depth validation. |
+| `TSSSaturation` | Good's coverage, `1 - singletons/reads`: the estimated chance the next read comes from a fragment already seen. This describes observed fragment patterns, not new-molecule or new-locus discovery probability. |
+| `snRNA5pPct` | Share of the signal within 500 bp of an annotated snRNA 5′ end that sits within 5 bp of it, which requires a stranded `qc / snrnas`. Sm-class snRNAs are capped Pol II transcripts, so 5′-end concentration is a useful cross-check, subject to annotation and processing. It is not specific evidence of enzyme failure and needs no matched input. |
+| `tRNA5pPct` | The same measurement at mature tRNA 5′ ends, which requires a stranded `qc / trnas`. Signal at processed tRNA ends can be consistent with incomplete removal of 5′-monophosphate RNA. Interpretation also depends on precursor versus mature annotations, processing and mapping; this is a complementary indicator, not a reaction-specific diagnosis. |
+| `csFRiP` | Fraction of nuclear reads falling in csRNA-called TSSs. The default gate is 0.9; calibrate it for the organism, preparation and region set. It is not a direct purity measurement. |
 | `sFRiP` | Fraction of nuclear reads in input-called (small RNA) TSSs. |
 | `PctNuclear` | Percentage of reads on nuclear chromosomes, so excluding `qc / organelle_chroms`. |
 | `csEnrichment` | Ratio of csRNA FRiP to input FRiP, so how enriched the capped initiation signal is over background. |
@@ -62,7 +62,8 @@ than it would on a library-fraction metric.
 good.** Duplication at matched depth is complexity convolved with concentration, since
 reads pile up where the signal is, so a library that puts more of its reads into TSSs
 duplicates more at the same depth. Read `TSSDistinctFrag`, `TSSChao1` and
-`TSSSaturation` instead. The pipeline restricts all three to the called TSS set for
+`TSSSaturation` as fragment-pattern summaries. Independent molecules can share both
+ends, so these do not identify PCR duplicates without UMIs. The pipeline restricts all three to the called TSS set for
 exactly this reason.
 
 **Every per-class figure counts uniquely-mapping reads only.** All of them come from the
@@ -74,10 +75,9 @@ evidence that the rRNA sits in the discarded multi-mapping fraction. `BelowMapqR
 says how large that fraction is, and `program / keep_below_mapq_sample` will hand you
 the reads to identify.
 
-**`csEnrichment` does not discriminate at small group sizes.** On two to three libraries
-per condition it failed to separate a treatment that demonstrably changed the libraries.
-`PretRNAPct`, `PhosEfficiency`, alignment survival and the useful-read fraction did
-separate consistently, so power comparisons belong on those.
+**Small panels give uncertain estimates of QC discrimination.** A metric that did not
+separate one treatment panel may still be informative elsewhere. Evaluate
+`csEnrichment` alongside paired contamination and alignment-survival measurements.
 
 **Only the initial `Status` acts on anything.** `collect_consensus_tss` reads
 `qc_initial_cs.txt`, so that table's gates, `qc / min_cs_frip` and `qc /
@@ -98,3 +98,11 @@ so a FAIL there has already had no effect on the TSS set that table describes.
 | `qc/{sample}.aln.raw.txt` | Accounting of the unfiltered alignment. It counts the reads seen, then the unmapped, secondary and supplementary ones, then those with a primary alignment. For that last group it says how many fell below the MAPQ floor, how many failed the remaining filters, and how many passed. Ends with a MAPQ histogram and the filter settings in force. Counted in the pipe, since the unfiltered alignment never reaches disk. |
 | `qc/{sample}.unmapped.sample.fastq.gz`, `qc/{sample}.belowmapq.sample.fastq.gz` | Samples of discarded reads. The pipeline writes these only when the relevant `program / keep_*_sample` key is above zero. See [configuration.md](configuration.md). |
 | `qc/{sample}.aligner.log` | Aligner stderr. For STAR, the rule appends `Log.final.out` to it. |
+
+**QC gates and biochemical labels are operational indicators.** `Status=FAIL` means a
+configured gate was crossed, not that all calls are false. `PhosEfficiency`,
+`miRNADepletion`, `snRNA5pPct` and `tRNA5pPct` can be affected by processing,
+annotation, mapping and input composition as well as enzymatic depletion. They do not
+measure enzyme conversion rates or identify a failed reaction by themselves. Validate
+mechanistic interpretations with preparation controls. Annotation masks also restrict
+biological scope; see [configuration](configuration.md#annotation-masks-and-biological-scope).

@@ -35,6 +35,12 @@ annotation. If there is none, or you would rather not install it, point
 `program / homer / genome` at a genome FASTA instead and supply the annotation yourself
 through `program / homer / tss / gtf`.
 
+The workflow's `--use-conda` setting now points to the tracked `full_env.yaml` (relative
+to the Snakefile), covering every supported aligner. Manually installed `bfqutils` and
+`bam2td` must remain on PATH. On macOS also install HOMER manually and remove its conda
+entry. Core analysis versions are pinned; transitive dependencies still require an
+[environment snapshot](docs/reproducibility.md) for exact replay.
+
 ## Running
 
 With the environment set up and your config and sample table filled in, running the
@@ -81,7 +87,7 @@ covers each of them properly.
 | `qc / min_cs_frip_final`, `min_pct_nuclear_final` | Gates for the final QC table, which measures a different region and so needs its own | fall back to the above |
 | `filtering / exclude_failed_from_consensus` | Keep a failed library's clusters out of the consensus union | `False` |
 | `filtering / tss_min_reps` | Replicates a TSS must appear in to enter the consensus set | 1 |
-| `filtering / tss_min_cpm`, `tss_min_samples` | CPM filter applied before TMM normalization | 0, 1 |
+| `filtering / tss_min_cpm`, `tss_min_samples` | CPM filter applied before TMMwsp normalization | 0, 1 |
 | `filtering / tss_srna_sizes` | Read lengths to treat as uncapped small RNA, dropping clusters dominated by them | `[]` |
 | `filtering / tss_max_top_sizes_fraction` | Drops clusters concentrated in their own commonest read lengths, catching contaminants no size list names | 1, disabled |
 | `program / keep_unmapped_sample`, `keep_below_mapq_sample` | Retain this many discarded reads per library, for asking afterwards what they were | 0 |
@@ -103,12 +109,13 @@ covers each of them properly.
 | `collect_consensus_tss` | The consensus set, requiring detection in `tss_min_reps` replicates. Narrow TSSs are padded, overlapping ones split, and those over miRNA or pre-tRNA loci removed. |
 | `quantify_final_tss` | HOMER quantification of the consensus set in the csRNA libraries. |
 | `tss_size_composition_library`, `tss_size_composition` | Per-cluster read-length composition, one job per library, joined into `tss.consensus.sizes.txt`. Reads nothing while both size filters are off. |
-| `normalize_tss_quantification` | The CPM filter, then the two size-composition filters, then TMM normalization with edgeR. Writes `tss.final.bed`. Every filter defaults to a no-op. |
+| `normalize_tss_quantification` | CPM, size-composition and optional depth-normalized csRNA/input filters, then edgeR TMMwsp normalization. Writes `tss.final.bed`. Every filter defaults to a no-op. |
+| `quantify_consensus_in_tss` | Quantifies the same consensus coordinates in input libraries when the ratio screen is enabled. |
 | `quantify_final_in_tss` | HOMER quantification of `tss.final.bed` in the input libraries. |
 | `qc_five_prime`, `qc_complexity` | Per-library 5′-end precision and library complexity, feeding the final QC table. |
 | `qc_final_tss` | The final QC table, re-derived from `tss.final.bed` rather than copied from the initial one. |
-| `generate_normalized_bw` | Raw bedGraphs scaled to RPM and written as bigWig, with small RNA regions optionally masked. |
-| `run_info` | Provenance: pipeline version and commit, host, resolved config, sample-table checksum, and the version of every tool the run used. |
+| `generate_normalized_bw` | Raw bedGraphs scaled using the TMMwsp-adjusted library sizes of retained TSSs, with input-called regions optionally masked. |
+| `run_info` | Provenance: pipeline version and commit, resolved config, reference/index and executable hashes, and installed Python, R and conda package versions. |
 
 ## Output
 
@@ -120,19 +127,26 @@ files under `qc/`.
 |------|----------|
 | `tss.final.bed` | The filtered consensus TSS set, BED6. Equal to `tss.consensus.bed` while the filters are at their defaults. |
 | `tss.final.raw.txt` | Raw tag counts per TSS per csRNA library. Rows follow `tss.final.bed`. |
-| `tss.final.cpm.txt` | TMM-normalized CPM counts, same row order. |
+| `tss.final.cpm.txt` | TMMwsp-normalized CPM counts, same row order. |
 | `tss.final.in.raw.txt` | Raw counts for the same set in the input libraries, used by the final QC. |
-| `norm_factors.txt` | edgeR TMM factors and RPM multipliers. |
+| `norm_factors.txt` | edgeR TMMwsp factors and per-million multipliers based on retained TSS counts. |
 | `tss.consensus.bed` | The consensus set before filtering. |
 | `tss.consensus.sizes.txt` | Per library and cluster: total reads, reads at `tss_srna_sizes` lengths, and the share held by the 1 to `tss_top_sizes_max` commonest lengths. Holds cluster names alone while both size filters are off, since nothing then reads the tag directories. |
-| `bw/{sample}.rpm.{pos,neg}.bw` | RPM-normalized bigWigs, one per strand. Reverse-strand scores are negative. |
+| `bw/{sample}.rpm.{pos,neg}.bw` | BigWigs scaled by TMMwsp-adjusted retained-TSS library sizes, one per strand. Reverse-strand scores are negative; `rpm` is a legacy filename label. |
 | `qc_final_{cs,in}.txt` | Per-library QC on the filtered set. |
 | `qc/qc_initial_{cs,in}.txt` | Per-library QC on the merged initial set, and the source of the `Status` that gates the consensus. |
 | `run_info.txt` | Provenance for the run. |
 
+The bigWig multiplier is `1e6 / (TMMwsp factor × sum of retained TSS counts)`.
+Changing the retained catalogue can therefore change track scale even at unchanged loci.
+These are relative initiation tracks, not per-million total sequenced reads or an
+absolute measure of transcription. TMMwsp makes assumptions about expression changes;
+use suitable external controls for global shifts. See [normalization details](docs/reproducibility.md#normalization-and-bigwig-scale).
+
 ## Reproducibility
 
-Two runs on the same data write the same bytes. Everything HOMER produces is sorted on a
+With the same software, references, configuration and inputs, result tables are
+ordered deterministically. This is distinct from reproducing the software environment. Everything HOMER produces is sorted on a
 coordinate key on the way out of the rule that makes it, because `annotatePeaks.pl` and
 `findcsRNATSS.pl` both emit rows in the order their threads finish, and `makeUCSCfile` is
 given an explicit `-color` because it picks a random one otherwise.
@@ -145,8 +159,8 @@ files differ only where a tool records its own command line, absolute paths incl
 
 ## Documentation
 
-- [`docs/configuration.md`](docs/configuration.md), the config keys that need more than a
-  schema description.
+- [`docs/configuration.md`](docs/configuration.md), including [stricter discovery options](docs/configuration.md#stricter-discovery-options) and the optional depth-normalized ratio screen.
+- [`docs/reproducibility.md`](docs/reproducibility.md), environment snapshots, reference fingerprints and track normalization.
 - [`docs/qc-metrics.md`](docs/qc-metrics.md), every QC column, what the numbers do not
   mean, and the supporting files under `qc/`.
 - [`docs/why-these-defaults.md`](docs/why-these-defaults.md), the measurements behind the

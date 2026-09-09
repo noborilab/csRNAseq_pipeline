@@ -35,23 +35,21 @@ and appears either way. The TP and FP counts are the signal.
 
 ## Why `qc / min_log2_fold` exists
 
-For a sound library the threshold HOMER chooses is a little stricter than the constant
-it replaces, and TSS counts fall slightly. For a library that has lost its capped signal
-it can come out at or below zero, and a threshold at or below zero accepts TSSs that
-carry no more signal than their own input, and such a TSS cannot be genuine. Such a
-library then reports many more TSSs with an annotation than without it, so the
-annotation makes it look more productive rather than less.
+A low annotation-derived threshold can flag weak separation of initiation signal from
+background. It can also reflect the annotation, input composition or biological context;
+it does not prove that every accepted locus is false. The threshold belongs to the
+library-level calling procedure and is not the enrichment of every individual cluster.
 
-The choice happens inside HOMER and there is no flag to put a floor under it, so the
-pipeline reads the threshold back out of `tss/<sample>.stats.txt` and gates on it here.
-Falling back to `default_log2_fold` when the key is unset is the defensible bound, since
-a threshold chosen from the data should not end up looser than the constant it replaced.
+The pipeline reports this threshold and can fail a library under a configured policy.
+Using `default_log2_fold` as the fallback floor is conservative, not a statistical rule
+that learned thresholds must be stricter than fixed ones. Calibrate against controls and
+inspect other QC before excluding a library.
 
 ## Why one failed library matters to everything
 
 The consensus set is a union, so a library that fails QC does not simply carry poor
-numbers of its own. The spurious TSSs it calls join the shared set, every other library
-is then quantified over them, and a single bad library can contribute a large block of
+numbers of its own. Its calls join the shared set, every other library is then
+quantified over them, including any false calls, and a single bad library can contribute a large block of
 the final set on its own. That is what `exclude_failed_from_consensus` is for, and
 `tss_min_reps: 2` is worth considering alongside it so that no one library can inject a
 TSS that no other library supports.
@@ -85,29 +83,22 @@ implausibly low.
 
 ## Why the size filter uses read length
 
-Abundant uncapped small RNAs are the one contaminant the other filters cannot reach,
-since they survive the enzymatic depletion well enough that HOMER calls them as TSSs.
-Enrichment over the matched input holds them off while the csRNA library is clean, but
-it weakens as the library degrades, because a library that has lost its capped signal is
-proportionally richer in small RNA than its own input is. Read length does not degrade
-that way, and genuine initiation is never confined to a single small size class, which
-is what makes length the more durable signal of the two.
+Processed small RNAs can survive the preparation and contribute apparent initiation
+clusters. Concentration in expected small-RNA lengths is a useful screen, especially
+when csRNA/input enrichment becomes less informative in contaminated libraries. It is
+not a direct assay of cap state or RNA origin. Size selection and trimming can narrow
+the observed lengths of genuine initiation products too.
 
 ## Why there is a second, list-free size filter
 
-`tss_srna_sizes` catches only contaminants whose length you can name in advance.
-`tss_max_top_sizes_fraction` needs no list and asks instead how concentrated a TSS is in
-its own commonest lengths. Genuine initiation is heterogeneous, because a promoter fires
-across a window and the resulting RNAs vary in length, so a genuine TSS spreads over
-tens of lengths. A discretely processed RNA has one 5′ end and one 3′ end and puts
-nearly everything into one or two, which is how this filter catches species that fall
-outside any small RNA size class.
+The top-lengths filter can flag concentrated RNA populations outside a specified size
+list. Many promoter-derived libraries span a range of lengths, but this is an empirical
+pattern rather than a universal property of initiation. A focused start site and a
+narrow insert-length distribution are different measurements.
 
-A handful of reads gives a poor estimate of concentration, so the flag rate rises at
-weakly expressed TSSs. That is why `tss_srna_min_reads` defaults to 100: a genuine
-single-locus contaminant is usually very abundant, so a read floor keeps it while
-dropping most of the small-sample noise. Lower the floor if you would rather be
-sensitive.
+The default floor of 100 reads limits unstable estimates at low depth. It also leaves
+weak contaminants unfiltered. Both size filters remain disabled by default; evaluate
+sensitivity and losses at independently supported initiation sites before enabling them.
 
 ## What the read-length columns can and cannot show
 
@@ -128,9 +119,8 @@ shape statistic rather than a measurement of purity and because it largely resta
 
 A fragment is a `(position, strand, length)` triple rather than a 5′ position alone,
 because a single in-TSS position carries several distinct lengths, and a count of
-positions alone would treat much of the genuine diversity as duplication. Two reads that
-share both ends are far more likely to be copies of one molecule, which is what a
-duplicate should mean.
+positions alone would treat much of the genuine diversity as duplication. Identical coordinates can arise from independent molecules as well as PCR copies.
+Without UMIs these are fragment-pattern diversity estimates, not molecule counts.
 
 Restricting the count to the final TSS set decides the answer rather than refining it. A
 library made of scattered degradation background has more distinct positions genome-wide
@@ -140,23 +130,23 @@ on complexity. Restricted to called TSSs the ranking inverts to something usable
 The table reports Chao1 in place of a depth-matched count. To match depth across a set
 of libraries you must cut every library down to the shallowest one, which either
 discards most of a good library's data or refuses to answer for the libraries most worth
-judging. Chao1 needs only singleton and doubleton counts, and it has a value for every
-library. Good's coverage answers the separate question of whether more sequencing would
-pay. Nothing gates on any of the three, partly because Chao1 still inflates for
+judging. Chao1 uses singleton and doubleton fragment-pattern counts to estimate unseen
+patterns under sampling assumptions. Good's coverage estimates the chance of seeing a
+previously observed pattern, not the chance of discovering a new molecule or locus.
+Neither replaces matched-depth comparisons or a library-complexity experiment. Nothing gates on any of the three, partly because Chao1 still inflates for
 background-heavy libraries and partly because saturation restates purity to a degree.
 
 ## Why `snRNA5pPct` is the one to watch and `tRNA5pPct` is not
 
-Sm-class snRNAs are capped Pol II transcripts, so a working library puts nearly all of
-their signal on the annotated 5′ end, and losing that precision is a direct symptom of a
-phosphatase step that has failed. tRNA 5′ ends carry a monophosphate left by RNase P and
-become ligation-competent when the same step fails, so tRNA precision moves the opposite
-way, but only in the most extreme cases, which leaves it too insensitive to gate on. The
-table carries it as a cross-check on which chemistry failed.
+Sm-class snRNAs are capped Pol II transcripts, making annotated 5′-end concentration
+a useful QC cross-check. Reduced precision is compatible with degradation background
+or failed depletion, but can also reflect annotation and RNA processing. It is not a
+specific biochemical diagnosis of phosphatase failure. tRNA-end signal can provide
+complementary evidence, subject to mature versus precursor annotation and mapping bias.
 
-Do not combine the two into a ratio or a difference. The tRNA behaviour swamps the snRNA
-signal, so either combination loses the clean separation the snRNA measure has on its
-own.
+Interpret both alongside matched input and preparation controls. Neither metric gates
+the workflow, and their diagnostic value must be established in the organism and
+library preparation being studied.
 
 ## `findcsRNATSS.pl` against `findcsRNATSR.pl`
 
@@ -168,10 +158,10 @@ default stays on the legacy name only because `findcsRNATSR.pl` ships with an un
 
 ## Two metrics that do less than they appear to
 
-`csEnrichment` does not discriminate at the group sizes these experiments usually have.
-With two or three libraries per condition it has failed to separate conditions that
-demonstrably differed, so power comparisons belong on the contamination and survival
-metrics instead.
+`csEnrichment` can have limited discriminatory power in small panels. A failure to
+separate a particular set of conditions does not establish that the metric is generally
+uninformative. Examine paired effects, uncertainty, contamination and alignment survival
+together; none alone establishes assay specificity.
 
 A duplicate rate is not a quality measure either. Duplication at matched depth is
 complexity convolved with concentration, since reads pile up where the signal is, so a

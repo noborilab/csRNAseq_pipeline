@@ -279,9 +279,9 @@ properties:
                 description: >
                   HOMER -pseudoCount: normalised reads added to both sides of the
                   enrichment ratio. This is what lets a cluster with zero input
-                  coverage pass automatically, since log2((cs+1)/(0+1)) is large
-                  by construction. Raise it to demand real input coverage before
-                  believing an enrichment. Default matches HOMER's own.
+                  coverage have a finite ratio; zero input alone does not guarantee
+                  acceptance. Increasing it reduces low-count enrichment but does
+                  not require nonzero input coverage.
               default_log2_fold:
                 type: number
                 default: 1
@@ -374,9 +374,11 @@ properties:
         type: number
         default: 0
         description: >
-          Minimum csRNA/input read ratio for a TSS to count as "expressed"
+          Minimum non-organelle-depth-normalized csRNA/input ratio for a TSS
           in a sample. A TSS is kept only if this ratio is met in at least
-          tss_min_ratio_samples csRNA samples. Default 0 disables the filter.
+          tss_min_ratio_samples csRNA samples. Counts use identical consensus regions;
+          depths are TotalReads minus OrganelleReads, with a one-read input floor.
+          This is a screening heuristic, not a significance test. Default 0 disables it.
       tss_min_ratio_samples:
         type: integer
         default: 1
@@ -412,11 +414,9 @@ properties:
         default: 2
         description: >
           How many of a TSS cluster's commonest read lengths the top-lengths
-          filter adds up. Genuine initiation is heterogeneous, spreading reads
-          over tens of lengths, so its two commonest lengths hold only about a
-          fifth of a protein-coding cluster. A discretely processed RNA puts
-          nearly everything into one or two. Only used when
-          tss_max_top_sizes_fraction is below 1.
+          filter adds up. Concentrated read lengths can flag processed RNAs but
+          also reflect size selection, trimming or sampling. Validate against
+          known initiation loci. Only used when tss_max_top_sizes_fraction is below 1.
       tss_max_top_sizes_fraction:
         type: number
         minimum: 0
@@ -425,13 +425,10 @@ properties:
         description: >
           Maximum fraction of a TSS cluster's reads allowed to fall in its
           tss_top_sizes_n commonest read lengths before the cluster is treated
-          as a discretely processed RNA rather than a transcription start site,
-          and dropped. Default 1 disables the filter (no concentration is too
-          high). 0.8 with tss_top_sizes_n 2 is a good starting point: measured
-          on Arabidopsis csRNA-seq it flags 0.09% of protein-coding clusters and
-          17% of transposon clusters. Unlike tss_srna_sizes this needs no prior
-          knowledge of which lengths are contaminating, so it catches species
-          outside the usual small RNA sizes.
+          as a candidate processed-RNA contaminant and dropped. Default 1 disables
+          the filter. A value of 0.8 with tss_top_sizes_n 2 is a starting point to
+          evaluate, not a validated universal threshold. No predefined size list
+          is required, but technical narrowing can also flag genuine initiation.
       tss_srna_min_reads:
         type: integer
         default: 100
@@ -550,7 +547,8 @@ properties:
         description: >
           Minimum Fraction of Reads in Peaks (FRiP) for a csRNA sample to
           pass QC. FRiP measures what fraction of nuclear reads fall within
-          called TSSs; values below ~0.9 suggest a library quality problem.
+          called TSSs. The default 0.9 is a configurable heuristic, not a universal
+          purity threshold; calibrate it against controls and the region set.
       min_pct_nuclear:
         type: number
         default: 90
@@ -565,13 +563,11 @@ properties:
           Minimum enrichment threshold a library's TSS calling may use before the
           library fails QC. With an annotation, HOMER chooses this threshold per
           library from the data and writes it to tss/<sample>.stats.txt as
-          "log2 fold vs. input"; there is no flag to floor it. On libraries that
-          have lost their capped signal it picks values at or below zero, which
-          accepts clusters carrying less signal than their own input, and those
-          calls then enter the consensus union and are quantified everywhere.
-          Null falls back to program/homer/tss/default_log2_fold, on the grounds
-          that a data-driven threshold should never be looser than the constant it
-          replaced. Set to a number to gate independently of that constant.
+          "log2 fold vs. input"; there is no flag to floor it. Low values can
+          indicate weak signal/background separation, but also depend on annotation
+          and input composition. A failed gate is not proof that all calls are false.
+          Null falls back to program/homer/tss/default_log2_fold as a conservative
+          policy choice. Set a number to use an independently calibrated bound.
       min_cs_frip_final:
         type: ["number", "null"]
         default: null

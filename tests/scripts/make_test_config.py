@@ -22,6 +22,8 @@ def main():
     p.add_argument("output_dir")
     p.add_argument("intermediate_dir")
     p.add_argument("genome_index")
+    p.add_argument("--min-ratio", type=float, default=None)
+    p.add_argument("--min-reps", type=int, default=None)
     p.add_argument("--min-cpm",     type=float, default=None)
     p.add_argument("--min-samples", type=int,   default=None)
     p.add_argument("--srna-sizes", default=None,
@@ -72,6 +74,10 @@ def main():
     if cfg.get("qc", {}).get("trnas"):
         cfg["qc"]["trnas"]  = abs_fixture(cfg["qc"]["trnas"])
 
+    if args.min_ratio is not None:
+        cfg["filtering"]["tss_min_cs_in_ratio"] = args.min_ratio
+    if args.min_reps is not None:
+        cfg["filtering"]["tss_min_reps"] = args.min_reps
     if args.min_cpm is not None:
         cfg["filtering"]["tss_min_cpm"] = args.min_cpm
     if args.min_samples is not None:

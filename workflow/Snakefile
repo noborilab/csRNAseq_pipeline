@@ -140,8 +140,8 @@ MIN_CS_FRIP_FINAL = resolve_gate("min_cs_frip_final", MIN_CS_FRIP)
 MIN_PCT_NUCLEAR_FINAL = resolve_gate("min_pct_nuclear_final", MIN_PCT_NUCLEAR)
 # HOMER chooses the enrichment threshold per library when it has an annotation, and no
 # flag floors it, so the floor lives here: a library whose chosen threshold is below this
-# fails QC. Falling back to default_log2_fold is the defensible bound, since a data-driven
-# threshold should never end up looser than the constant it replaced.
+# fails the configured QC policy. Falling back to default_log2_fold is conservative,
+# not a statistical requirement or proof that the library failed biochemically.
 MIN_LOG2_FOLD = resolve_gate(
     "min_log2_fold", config["program"]["homer"]["tss"]["default_log2_fold"]
 )
@@ -279,7 +279,7 @@ for i in range(sampletab.shape[0]):
         )
 
 
-conda: "workflow/envs/env.yaml"
+conda: "envs/full_env.yaml"
 
 
 onstart:
@@ -560,7 +560,7 @@ rule align:
         "Aligning {wildcards.sample}"
     input:
         fq=INTERMEDIATE_DIR + "/trim/{sample}.fq.gz",
-        idx=INDEX_SENTINEL if NEED_INDEX else [],
+        idx=INDEX_SENTINEL,
     output:
         bam=temp(INTERMEDIATE_DIR + "/bam/{sample}.sort.bam")
         if not config["program"]["keep_bam"]
@@ -1082,10 +1082,15 @@ rule tss_size_composition:
 
 rule normalize_tss_quantification:
     message:
-        "Filtering and TMM-normalising TSS counts"
+        "Filtering and TMMwsp-normalising TSS counts"
     input:
         quant=OUTPUT_DIR + "/tss.consensus.homer.raw.txt",
-        quant_in=OUTPUT_DIR + "/tss_merged/all_cs.tss_merged_quant_in.txt",
+        quant_in=(OUTPUT_DIR + "/tss.consensus.in.homer.raw.txt"
+                  if config["filtering"].get("tss_min_cs_in_ratio", 0) > 0 else []),
+        stats_cs=(OUTPUT_DIR + "/qc/stats_initial_cs.txt"
+                  if config["filtering"].get("tss_min_cs_in_ratio", 0) > 0 else []),
+        stats_in=(OUTPUT_DIR + "/qc/stats_initial_in.txt"
+                  if config["filtering"].get("tss_min_cs_in_ratio", 0) > 0 else []),
         bed=OUTPUT_DIR + "/tss.consensus.bed",
         sizes=OUTPUT_DIR + "/tss.consensus.sizes.txt",
     output:
@@ -1144,6 +1149,37 @@ rule generate_normalized_bw:
         "scripts/generate_normalized_bw.R"
 
 
+rule quantify_consensus_in_tss:
+    message:
+        "Quantifying consensus TSSs in input libraries"
+    input:
+        tss=OUTPUT_DIR + "/tss.consensus.bed",
+        td=list(
+            (OUTPUT_DIR + "/tagdir/") + s
+            for s in sampletab["id"][sampletab["sample_type"] == "input"]
+        ),
+    output:
+        OUTPUT_DIR + "/tss.consensus.in.homer.raw.txt",
+    log:
+        OUTPUT_DIR + "/qc/quantify_consensus_in_tss.log",
+    benchmark:
+        OUTPUT_DIR + "/qc/quantify_consensus_in_tss.benchmark.txt",
+    resources:
+        mem_mb=4000,
+    params:
+        genome=config["program"]["homer"]["genome"],
+    shell:
+        # Sorted like every other annotatePeaks table here, which also puts it in the
+        # same order as the consensus csRNA quantification.
+        """
+            annotatePeaks.pl {input.tss} {params.genome} \
+                -strand + -fragLength 1 -raw -d {input.td} \
+                > {output}.homer 2> {log}
+            bash {workflow.basedir}/scripts/sort_table.sh {output}.homer -k2,2 -k3,3n -k4,4n -k5,5 -k1,1 > {output}
+            rm -f {output}.homer
+        """
+
+
 rule quantify_final_in_tss:
     message:
         "Quantifying final TSSs in input libraries"
@@ -1182,6 +1218,11 @@ rule run_info:
         # Depends on the last outputs so the manifest reflects a finished run.
         OUTPUT_DIR + "/tss.final.cpm.txt",
         OUTPUT_DIR + "/qc_final_cs.txt",
+        OUTPUT_DIR + "/qc_final_in.txt",
+        expand(OUTPUT_DIR + "/bw/{sample}.rpm.{strand}.bw",
+               sample=list(sampletab["id"][sampletab["sample_type"] == "csrna"]),
+               strand=["pos", "neg"]),
+        provenance=workflow.basedir + "/scripts/provenance.py",
     output:
         OUTPUT_DIR + "/run_info.txt",
     resources:
@@ -1191,6 +1232,7 @@ rule run_info:
         version=PIPELINE_VERSION,
         sample_table=config["sample_table"],
         snakemake_version=snakemake.__version__,
+        resolved_config=dict(config),
     run:
         import json
         import tempfile
