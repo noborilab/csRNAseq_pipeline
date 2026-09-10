@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.4] - 2026-09-10
+
+### Fixed
+- Read initial and final QC stats as tab-separated tables, preserving empty fields
+  and recognizing `NA` and `na` as missing values.
+- Emit `NA` for missing position-zero A frequencies instead of an empty stats field;
+  retain measured zero values.
+
+### Tests
+- Cover missing and zero frequencies in the stats writer and missing-field parsing
+  in both QC readers.
+
 ## [0.16.3] - 2026-09-09
 
 ### Fixed
@@ -593,7 +605,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read is forward-strand, which had crashed `rtracklayer::export.bw()`.
 - `zcat` on macOS cannot decompress `.gz` files; replaced with `gzip -dc` throughout.
 
-[Unreleased]: https://github.com/noborilab/csRNAseq_pipeline/compare/v0.16.2...HEAD
+[Unreleased]: https://github.com/noborilab/csRNAseq_pipeline/compare/v0.16.4...HEAD
+[0.16.4]: https://github.com/noborilab/csRNAseq_pipeline/compare/v0.16.3...v0.16.4
+[0.16.3]: https://github.com/noborilab/csRNAseq_pipeline/compare/v0.16.2...v0.16.3
 [0.16.2]: https://github.com/noborilab/csRNAseq_pipeline/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/noborilab/csRNAseq_pipeline/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/noborilab/csRNAseq_pipeline/compare/v0.15.0...v0.16.0

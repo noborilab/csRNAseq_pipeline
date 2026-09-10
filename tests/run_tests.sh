@@ -331,6 +331,7 @@ run_unit_smk() {
 }
 
 run_unit() {
+    run_step "stats IO regressions" python tests/scripts/test_stats_io.py
     run_step "filter regressions" Rscript tests/scripts/test_filter_regressions.R
     run_step "provenance" python tests/scripts/test_provenance.py
     for rule in normalize size_composition collect_consensus qc_initial qc_final aln_summary; do

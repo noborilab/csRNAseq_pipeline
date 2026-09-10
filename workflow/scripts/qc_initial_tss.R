@@ -25,8 +25,9 @@ OUT_REPLCOR <- snakemake@output[["repl_cor"]]
 tss_cs <- import(trimws(TSS_CS))
 tss_in <- import(trimws(TSS_IN))
 
-stats_cs <- read.table(trimws(STATS_CS), header=TRUE, stringsAsFactors=FALSE)
-stats_in <- read.table(trimws(STATS_IN), header=TRUE, stringsAsFactors=FALSE)
+# Preserve empty TSV fields from older stats files as missing values.
+stats_cs <- read.table(trimws(STATS_CS), header=TRUE, sep="\t", na.strings=c("", "NA", "na"), stringsAsFactors=FALSE)
+stats_in <- read.table(trimws(STATS_IN), header=TRUE, sep="\t", na.strings=c("", "NA", "na"), stringsAsFactors=FALSE)
 
 # Build the cs->in pairing from the explicit id lists passed by Snakemake.
 # This handles csRNA samples that share an input with a different sample_name

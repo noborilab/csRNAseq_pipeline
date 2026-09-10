@@ -38,8 +38,9 @@ read_log2_threshold <- function(sample, dir) {
     ))
 }
 
-stats_cs <- read.table(trimws(snakemake@input[["stats_cs"]]), header = TRUE, stringsAsFactors = FALSE)
-stats_in <- read.table(trimws(snakemake@input[["stats_in"]]), header = TRUE, stringsAsFactors = FALSE)
+# Preserve empty TSV fields from older stats files as missing values.
+stats_cs <- read.table(trimws(snakemake@input[["stats_cs"]]), header = TRUE, sep = "\t", na.strings = c("", "NA", "na"), stringsAsFactors = FALSE)
+stats_in <- read.table(trimws(snakemake@input[["stats_in"]]), header = TRUE, sep = "\t", na.strings = c("", "NA", "na"), stringsAsFactors = FALSE)
 
 m <- cs_to_in[stats_cs[["Sample"]]]
 if (anyNA(m)) {

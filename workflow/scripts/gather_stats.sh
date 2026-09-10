@@ -93,7 +93,9 @@ for i in "$@"; do
         ($1 in want) { sum += $3 }
         END { printf "%.0f", sum + 0 }' "$OUT_PREFIX/$i/tagInfo.txt")
     printf "%s\t" "$organelle_total" >> "$OUT"
-    awk '$1 == 0 {print $2}' "$OUT_PREFIX/$i/tagFreq.txt" | tr -d '\n' >> "$OUT"
+    # Missing position-zero frequencies are unknown, not measured zeros.
+    awk -F'\t' '$1 == 0 && NF >= 2 && $2 != "" {print $2; found = 1; exit}
+        END {if (!found) print "NA"}' "$OUT_PREFIX/$i/tagFreq.txt" | tr -d '\n' >> "$OUT"
     printf "\t" >> "$OUT"
     # Sum raw read counts on each strand from the bedGraphs. makeUCSCfile -raw writes
     # positive values on both strands, so no sign handling is needed here; the negative
