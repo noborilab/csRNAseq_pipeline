@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.5] - 2026-09-11
+
+### Fixed
+- Resolve consensus TSS overlaps jointly per chromosome and strand, preserving
+  cluster widths and genomic order while keeping clusters inside chromosome bounds.
+  This replaces pairwise shifting that could oscillate or stall at the 100-pass limit.
+  Report an impossible placement immediately when the widths cannot fit on a chromosome.
+
+### Tests
+- Cover boundary stalls, dense overlap chains, mixed widths and strands, and
+  impossible placements; verify small placements against an exhaustive optimum.
+
 ## [0.16.4] - 2026-09-10
 
 ### Fixed
@@ -605,7 +617,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read is forward-strand, which had crashed `rtracklayer::export.bw()`.
 - `zcat` on macOS cannot decompress `.gz` files; replaced with `gzip -dc` throughout.
 
-[Unreleased]: https://github.com/noborilab/csRNAseq_pipeline/compare/v0.16.4...HEAD
+[Unreleased]: https://github.com/noborilab/csRNAseq_pipeline/compare/v0.16.5...HEAD
+[0.16.5]: https://github.com/noborilab/csRNAseq_pipeline/compare/v0.16.4...v0.16.5
 [0.16.4]: https://github.com/noborilab/csRNAseq_pipeline/compare/v0.16.3...v0.16.4
 [0.16.3]: https://github.com/noborilab/csRNAseq_pipeline/compare/v0.16.2...v0.16.3
 [0.16.2]: https://github.com/noborilab/csRNAseq_pipeline/compare/v0.16.1...v0.16.2

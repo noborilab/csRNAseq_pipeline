@@ -113,8 +113,14 @@ HOMER genome resolution. These can run without Snakemake:
 
 ```bash
 Rscript tests/scripts/test_filter_regressions.R
+Rscript tests/scripts/test_overlap_resolution.R
 python tests/scripts/test_provenance.py
 ```
+
+The overlap regression checks the production consensus placement at chromosome
+boundaries, along dense chains, and across mixed widths/strands. It also compares
+small cases with an exhaustive minimum-displacement solution and verifies a full
+consensus run for the former 100-iteration boundary stall.
 
 If a manually installed R works interactively but Snakemake cannot load its packages,
 remember that Snakemake invokes `Rscript --vanilla`, which skips `.Renviron`. Export the

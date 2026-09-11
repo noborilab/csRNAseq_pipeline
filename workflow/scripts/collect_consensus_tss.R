@@ -93,56 +93,50 @@ seqlevels(tss, pruning.mode = "coarse") <- intersect(valid_chroms, seqlevels(tss
 tss <- sort(tss)
 tss[width(tss) < 150] <- resize(tss[width(tss) < 150], 150, 'center')
 
-# Widening to 150 bp, and the shifting below, can push a cluster past either end of its
-# chromosome. Slide such clusters back inside instead of trimming them, so every cluster
-# keeps its width; a chromosome shorter than the cluster itself is left alone and reported.
+# Place every chromosome/strand jointly. Pairwise shifts can create another overlap,
+# and moving a right-hand interval back inside its chromosome can undo the shift.
+# Transform starts s_i to z_i = s_i - sum(widths before i). Nonoverlap is then
+# exactly the constraint z_1 <= ... <= z_n. Isotonic regression finds the closest
+# placement in squared displacement, and clamping its fit enforces both chromosome
+# bounds. Rounding a monotone fit preserves nonoverlap and all original widths.
+resolve_tss_overlaps <- function(x, chrom_len) {
+  if (!length(x)) return(x)
+  if (any(!as.character(strand(x)) %in% c("+", "-"))) {
+    stop("TSS overlap resolution requires explicit + or - strands")
+  }
+  groups <- base::split(seq_len(length(x)),
+                        paste(as.character(seqnames(x)), as.character(strand(x)), sep = "\t"))
+  moved <- 0L
+  for (indices in groups) {
+    indices <- indices[order(start(x)[indices], end(x)[indices])]
+    chromosome <- as.character(seqnames(x)[indices[1]])
+    direction <- as.character(strand(x)[indices[1]])
+    len <- unname(chrom_len[chromosome])
+    if (length(len) != 1L || !is.finite(len) || len < 1 || len != floor(len)) {
+      stop("Missing or invalid chromosome length for ", chromosome)
+    }
+    widths <- as.numeric(width(x)[indices])
+    total_width <- sum(widths)
+    if (any(widths < 1) || total_width > len) {
+      stop("Cannot place ", length(indices), " TSS clusters on ", chromosome,
+           " (", direction, "): combined width ", total_width,
+           " bp exceeds chromosome length ", len,
+           " bp, or a cluster has zero width. Nonoverlapping placement cannot preserve cluster widths.")
+    }
+    offsets <- c(0, head(cumsum(widths), -1L))
+    desired <- as.numeric(start(x)[indices]) - offsets
+    fitted <- if (length(indices) == 1L) desired else stats::isoreg(desired)$yf
+    fitted <- pmax(1, pmin(len - total_width + 1, floor(fitted + 0.5)))
+    new_starts <- fitted + offsets
+    displacement <- new_starts - start(x)[indices]
+    moved <- moved + sum(displacement != 0)
+    x[indices] <- shift(x[indices], displacement)
+  }
+  cat('Placed TSS clusters without overlaps; shifted ', moved, ' cluster(s)\n', sep = '')
+  sort(x)
+}
 chrom_len <- setNames(as.numeric(cs$V2), as.character(cs$V1))
-nudge_into_chrom <- function(x) {
-  len <- chrom_len[as.character(seqnames(x))]
-  off <- ifelse(start(x) < 1, 1 - start(x),
-         ifelse(!is.na(len) & end(x) > len, len - end(x), 0))
-  off[is.na(off)] <- 0
-  ok <- is.na(len) | width(x) <= len
-  if (any(off != 0 & ok)) {
-    cat('Sliding ', sum(off != 0 & ok), ' cluster(s) back inside the chromosome bounds\n', sep = '')
-    x[off != 0 & ok] <- shift(x[off != 0 & ok], off[off != 0 & ok])
-  }
-  if (any(!ok)) {
-    message('WARNING: ', sum(!ok), ' cluster(s) are wider than their chromosome and left as they are')
-  }
-  x
-}
-tss <- nudge_into_chrom(tss)
-
-fix_ov_tss <- function(x) {
-  wOv <- end(x[1]) - start(x[2])
-  mvR <- wOv %/% 2
-  mvL <- -(mvR + wOv %% 2)
-  x[1] <- shift(x[1], mvL)
-  x[2] <- shift(x[2], mvR + 1)
-  x
-}
-max_iter <- 100
-iter <- 0
-while (iter < max_iter) {
-  tssOvs <- findOverlaps(tss, ignore.strand = FALSE)
-  # Every overlap is reported twice, as (i,j) and (j,i). Keep one of each pair by index
-  # order: the previous "every other hit" form relied on the two members of a pair landing
-  # adjacent in the Hits object, which holds for equal-width sorted ranges but is not
-  # something findOverlaps promises.
-  tssOvs <- tssOvs[queryHits(tssOvs) < subjectHits(tssOvs)]
-  if (!length(tssOvs)) break
-  cat('Adjusting ', length(tssOvs), ' overlapping TSS pair(s) (iteration ', iter + 1, ') ...\n', sep = '')
-  for (i in seq_len(length(tssOvs))) {
-    tss[c(queryHits(tssOvs)[i], subjectHits(tssOvs)[i])] <-
-      fix_ov_tss(tss[c(queryHits(tssOvs)[i], subjectHits(tssOvs)[i])])
-  }
-  tss <- nudge_into_chrom(tss)
-  iter <- iter + 1
-}
-if (iter == max_iter) {
-  stop("ERROR: TSS overlap resolution did not converge after ", max_iter, " iterations")
-}
+tss <- resolve_tss_overlaps(tss, chrom_len)
 
 mirnas <- snakemake@params[["mirnas"]]
 if (nzchar(mirnas)) {
